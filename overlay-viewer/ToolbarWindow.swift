@@ -9,7 +9,7 @@ final class ToolbarWindow: NSWindow {
 
     convenience init(controller: OverlayWindowController) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 96),
+            contentRect: NSRect(x: 0, y: 0, width: 280, height: 128),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -26,7 +26,7 @@ final class ToolbarWindow: NSWindow {
         hasShadow = true
         isMovableByWindowBackground = true
 
-        let container = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 280, height: 96))
+        let container = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 280, height: 128))
         container.material = .hudWindow
         container.state = .active
         container.wantsLayer = true
@@ -43,15 +43,21 @@ final class ToolbarWindow: NSWindow {
         let clickThroughCheckbox = NSButton(checkboxWithTitle: "Click-through",
                                              target: self,
                                              action: #selector(clickThroughChanged(_:)))
-        clickThroughCheckbox.frame = NSRect(x: 16, y: 8, width: 150, height: 18)
+        clickThroughCheckbox.frame = NSRect(x: 16, y: 40, width: 150, height: 18)
         clickThroughCheckbox.contentTintColor = .white
 
-        windowOpacityLabel.frame = NSRect(x: 16, y: 70, width: 60, height: 16)
-        windowOpacitySlider.frame = NSRect(x: 80, y: 68, width: 184, height: 20)
-        contentOpacityLabel.frame = NSRect(x: 16, y: 40, width: 60, height: 16)
-        contentOpacitySlider.frame = NSRect(x: 80, y: 38, width: 184, height: 20)
+        windowOpacityLabel.frame = NSRect(x: 16, y: 102, width: 60, height: 16)
+        windowOpacitySlider.frame = NSRect(x: 80, y: 100, width: 184, height: 20)
+        contentOpacityLabel.frame = NSRect(x: 16, y: 72, width: 60, height: 16)
+        contentOpacitySlider.frame = NSRect(x: 80, y: 70, width: 184, height: 20)
 
-        [windowOpacityLabel, windowOpacitySlider, contentOpacityLabel, contentOpacitySlider, clickThroughCheckbox]
+        let changeImageButton = NSButton(frame: NSRect(x: 16, y: 8, width: 248, height: 24))
+        changeImageButton.title = "Change Image…"
+        changeImageButton.bezelStyle = .rounded
+        changeImageButton.target = self
+        changeImageButton.action = #selector(changeImageAction)
+
+        [windowOpacityLabel, windowOpacitySlider, contentOpacityLabel, contentOpacitySlider, clickThroughCheckbox, changeImageButton]
             .forEach { container.addSubview($0) }
 
         self.contentView = container
@@ -80,6 +86,10 @@ final class ToolbarWindow: NSWindow {
 
     @objc private func clickThroughChanged(_ sender: NSButton) {
         controller?.setClickThrough(sender.state == .on)
+    }
+
+    @objc private func changeImageAction() {
+        controller?.clearAndReopen()
     }
 
     override var canBecomeKey: Bool { true }

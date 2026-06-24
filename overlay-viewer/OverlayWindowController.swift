@@ -42,6 +42,12 @@ final class OverlayWindowController: NSWindowController {
         }
     }
 
+    func clearAndReopen() {
+        canvasView.image = nil
+        window?.orderOut(nil)   // hide overlay while picker is open
+        presentOpenPanel()      // immediately show file picker
+    }
+
     func toggleVisibility() {
         guard let window else { return }
         if window.isVisible {

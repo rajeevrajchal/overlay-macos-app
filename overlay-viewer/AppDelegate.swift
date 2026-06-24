@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Image…", action: #selector(openImage), keyEquivalent: "o")
+        menu.addItem(withTitle: "Change Image…", action: #selector(changeImage), keyEquivalent: "r")
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Toggle Visibility", action: #selector(toggleVisibility), keyEquivalent: "h")
         menu.addItem(NSMenuItem.separator())
@@ -36,6 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openImage() {
         overlayController.presentOpenPanel()
+    }
+
+    @objc private func changeImage() {
+        overlayController.clearAndReopen()
     }
 
     @objc private func toggleVisibility() {
