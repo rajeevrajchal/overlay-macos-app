@@ -6,44 +6,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlayController = OverlayWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // This is a "background utility" — no Dock icon, lives in the menu bar.
-        // Set "Application is agent (UIElement)" = YES in Info.plist to fully hide the Dock icon.
         NSApp.setActivationPolicy(.accessory)
-
         setupStatusItem()
-        overlayController.showOpenPanelIfNeeded()
+        overlayController.showWelcomeWindow()
     }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "photo.on.rectangle.angled",
-                                            accessibilityDescription: "Overlay Viewer")
+        statusItem.button?.image = NSImage(
+            systemSymbolName: "photo.on.rectangle.angled",
+            accessibilityDescription: "Overlay Viewer"
+        )
 
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Image…", action: #selector(openImage), keyEquivalent: "o")
-        menu.addItem(withTitle: "Change Image…", action: #selector(changeImage), keyEquivalent: "r")
+        menu.addItem(withTitle: "Open Image…",       action: #selector(openImage),                    keyEquivalent: "o")
+        // "Change Image…" removed — available via toolbar ribbon "Change…" button
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Toggle Visibility", action: #selector(toggleVisibility), keyEquivalent: "h")
+        menu.addItem(withTitle: "Toggle Visibility",  action: #selector(toggleVisibility),             keyEquivalent: "h")
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit",               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
-        // Wire menu actions to self so they can reach the controller.
-        for item in menu.items {
-            item.target = self
-        }
-        menu.items.first?.target = self
+        for item in menu.items { item.target = self }
         statusItem.menu = menu
     }
 
-    @objc private func openImage() {
-        overlayController.presentOpenPanel()
-    }
-
-    @objc private func changeImage() {
-        overlayController.clearAndReopen()
-    }
-
-    @objc private func toggleVisibility() {
-        overlayController.toggleVisibility()
-    }
+    @objc private func openImage()        { overlayController.presentOpenPanelOrWelcome() }
+    @objc private func toggleVisibility() { overlayController.toggleVisibility() }
 }
