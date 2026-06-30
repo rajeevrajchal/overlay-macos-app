@@ -60,6 +60,7 @@ final class OverlayWindowController: NSWindowController {
     private var keyMonitor: Any?
     private var opacitySlider: NSSlider?
     private var settingsPopover: NSPopover?
+    private var resizer: ResizeHandleView?
 
     private enum ContentMode { case none, image }
     private var contentMode: ContentMode = .none
@@ -70,6 +71,7 @@ final class OverlayWindowController: NSWindowController {
     private static let lastFigmaNodeIDKey  = "overlay.lastFigmaNodeID"
     private static let customWidthKey      = "overlay.customWidth"
     private static let customHeightKey     = "overlay.customHeight"
+    private static let minWindowSize       = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
 
     // MARK: - Init
 
@@ -101,9 +103,18 @@ final class OverlayWindowController: NSWindowController {
             canvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
+        // Resize handle overlay (must be added LAST so it's on top) — gives the
+        // borderless overlay window real edge/corner drag-to-resize, not just
+        // the gear icon's numeric popover.
+        let resizer = ResizeHandleView(minSize: Self.minWindowSize, frame: container.bounds)
+        resizer.autoresizingMask = [.width, .height]
+        resizer.chromeHeight = ToolbarRibbonView.height
+        container.addSubview(resizer)
+        self.resizer = resizer
+
         window.contentView = container
         window.delegate = self
-        window.minSize = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
+        window.minSize = Self.minWindowSize
         window.setFrameAutosaveName("OverlayWindowFrame")
         if !NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
             window.center()
@@ -206,7 +217,11 @@ final class OverlayWindowController: NSWindowController {
                 guard let self else { return }
                 do {
                     let image = try await FigmaAPIClient.shared.fetchRenderedImage(fileKey: fileKey, nodeID: nodeID)
-                    self.load(figmaImage: image, resource: FigmaURLParser.Resource(fileKey: fileKey, nodeID: nodeID))
+                    self.load(
+                        figmaImage: image,
+                        resource: FigmaURLParser.Resource(fileKey: fileKey, nodeID: nodeID),
+                        resetCustomSize: false
+                    )
                 } catch {
                     self.clearPersistedFigmaResource()
                     self.showWelcomeWindow()
@@ -217,20 +232,20 @@ final class OverlayWindowController: NSWindowController {
         guard let urlString = UserDefaults.standard.string(forKey: Self.lastImageKey),
               let url = URL(string: urlString),
               FileManager.default.fileExists(atPath: url.path) else { return false }
-        load(imageURL: url)
+        load(imageURL: url, resetCustomSize: false)
         return true
     }
 
     // MARK: - Image loading
 
-    private func load(imageURL: URL) {
+    private func load(imageURL: URL, resetCustomSize: Bool = true) {
         guard let image = NSImage(contentsOf: imageURL) else { return }
         welcomeController?.window?.orderOut(nil)
         canvasView.isHidden = false
         canvasView.image = image
         contentMode = .image
         clearPersistedFigmaResource()
-        presentLoadedImage(image)
+        presentLoadedImage(image, resetCustomSize: resetCustomSize)
         UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
     }
 
@@ -238,7 +253,7 @@ final class OverlayWindowController: NSWindowController {
 
     /// Renders a Figma file/node fetched via FigmaAPIClient (using the
     /// connected user's OAuth token) the same way as any other static image.
-    func load(figmaImage image: NSImage, resource: FigmaURLParser.Resource) {
+    func load(figmaImage image: NSImage, resource: FigmaURLParser.Resource, resetCustomSize: Bool = true) {
         welcomeController?.window?.orderOut(nil)
         canvasView.isHidden = false
         canvasView.image = image
@@ -250,10 +265,22 @@ final class OverlayWindowController: NSWindowController {
         } else {
             UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
         }
-        presentLoadedImage(image)
+        presentLoadedImage(image, resetCustomSize: resetCustomSize)
     }
 
-    private func presentLoadedImage(_ image: NSImage) {
+    /// `resetCustomSize` is true for any freshly user-opened image/file, so the
+    /// window always fits (contains) the new content instead of reusing a custom
+    /// size that was sized for a previous image's aspect ratio. It's false only
+    /// when restoring the same image on relaunch, where keeping the saved size
+    /// is the intended "persistent state" behavior.
+    private func presentLoadedImage(_ image: NSImage, resetCustomSize: Bool) {
+        resizer?.aspectRatio = image.size.width / image.size.height
+
+        if resetCustomSize {
+            UserDefaults.standard.removeObject(forKey: Self.customWidthKey)
+            UserDefaults.standard.removeObject(forKey: Self.customHeightKey)
+        }
+
         let savedW = UserDefaults.standard.double(forKey: Self.customWidthKey)
         let savedH = UserDefaults.standard.double(forKey: Self.customHeightKey)
         if savedW > 0 && savedH > 0 {
@@ -350,20 +377,34 @@ final class OverlayWindowController: NSWindowController {
         settingsBtn.target = self
         settingsBtn.action = #selector(openSettingsAction(_:))
 
-        let leadingStack = NSStackView(views: [closeBtn, changeBtn, removeBtn, settingsBtn])
-        leadingStack.orientation = .horizontal
-        leadingStack.spacing = 8
-        leadingStack.alignment = .centerY
-        leadingStack.translatesAutoresizingMaskIntoConstraints = false
+        // A zero-intrinsic-size view that soaks up all the slack between the
+        // button group and the opacity controls — the "space-between" half
+        // of a flex layout, AppKit-style.
+        let spacer = NSView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let trailingStack = NSStackView(views: [opacityLabel, slider])
-        trailingStack.orientation = .horizontal
-        trailingStack.spacing = 6
-        trailingStack.alignment = .centerY
-        trailingStack.translatesAutoresizingMaskIntoConstraints = false
+        // One stack instead of two independently-pinned ones: with two
+        // separate stacks there was no constraint stopping them from
+        // overlapping once the window got narrow. A single stack lets
+        // AppKit auto-hide the least essential controls (lowered via
+        // setClippingResistancePriority below) before anything can collide.
+        let toolbarStack = NSStackView(views: [
+            closeBtn, changeBtn, removeBtn, settingsBtn, spacer, opacityLabel, slider,
+        ])
+        toolbarStack.orientation = .horizontal
+        toolbarStack.spacing = 8
+        toolbarStack.alignment = .centerY
+        toolbarStack.translatesAutoresizingMaskIntoConstraints = false
 
-        ribbon.addSubview(leadingStack)
-        ribbon.addSubview(trailingStack)
+        // Hide order when space runs out, least important first: the
+        // opacity label's text, then the slider itself. The four core
+        // buttons stay visible at any width down to window.minSize.
+        toolbarStack.setClippingResistancePriority(.defaultLow, for: .horizontal)
+        toolbarStack.setVisibilityPriority(.init(rawValue: 200), for: opacityLabel)
+        toolbarStack.setVisibilityPriority(.init(rawValue: 400), for: slider)
+
+        ribbon.addSubview(toolbarStack)
 
         NSLayoutConstraint.activate([
             closeBtn.widthAnchor.constraint(equalToConstant: 22),
@@ -372,11 +413,9 @@ final class OverlayWindowController: NSWindowController {
             settingsBtn.heightAnchor.constraint(equalToConstant: 22),
             slider.widthAnchor.constraint(equalToConstant: 120),
 
-            leadingStack.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor, constant: 10),
-            leadingStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
-
-            trailingStack.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor, constant: -10),
-            trailingStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
+            toolbarStack.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor, constant: 10),
+            toolbarStack.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor, constant: -10),
+            toolbarStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
         ])
 
         return ribbon
@@ -401,7 +440,7 @@ final class OverlayWindowController: NSWindowController {
             let vc = SizeSettingsViewController()
             vc.onApply = { [weak self] w, h in
                 guard let self, let window = self.window else { return }
-                let clamped = NSSize(width: max(400, w), height: max(96, h))
+                let clamped = NSSize(width: max(Self.minWindowSize.width, w), height: max(Self.minWindowSize.height, h))
                 window.setContentSize(clamped)
                 window.center()
                 UserDefaults.standard.set(Double(clamped.width),  forKey: Self.customWidthKey)
