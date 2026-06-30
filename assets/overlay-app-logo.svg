@@ -1,0 +1,45 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#4338CA"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- App icon background -->
+  <rect x="0" y="0" width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+
+  <!-- Base window/screen, slightly receded -->
+  <rect x="120" y="150" width="220" height="160" rx="18"
+        fill="none" stroke="#A5B4FC" stroke-width="10" stroke-opacity="0.55"/>
+  <rect x="120" y="150" width="220" height="34" rx="18" fill="#A5B4FC" fill-opacity="0.18"/>
+  <circle cx="140" cy="167" r="5" fill="#A5B4FC" fill-opacity="0.7"/>
+  <circle cx="156" cy="167" r="5" fill="#A5B4FC" fill-opacity="0.7"/>
+
+  <!-- Overlay layer, offset on top, with shadow -->
+  <g filter="url(#softShadow)">
+    <rect x="190" y="222" width="220" height="160" rx="18"
+          fill="url(#accentGrad)" fill-opacity="0.92"/>
+  </g>
+
+  <!-- Corner brackets on overlay (selection / capture motif) -->
+  <g stroke="#0F172A" stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M 178 250 L 178 230 Q 178 222 186 222 L 206 222"/>
+    <path d="M 394 222 L 414 222 Q 422 222 422 230 L 422 250"/>
+    <path d="M 422 354 L 422 374 Q 422 382 414 382 L 394 382"/>
+    <path d="M 206 382 L 186 382 Q 178 382 178 374 L 178 354"/>
+  </g>
+
+  <!-- Cursor/pointer accent -->
+  <g transform="translate(330,300)">
+    <path d="M0 0 L0 46 L11 35 L20 56 L29 52 L20 31 L34 31 Z"
+          fill="#FFFFFF" stroke="#0F172A" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>

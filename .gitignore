@@ -43,6 +43,10 @@ fastlane/test_output
 # macOS
 .DS_Store
 
+# Local secrets (see README "Figma OAuth Setup" — not auto-loaded by the app,
+# values must be copied into the Xcode scheme's Environment Variables)
+.env
+
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
