@@ -317,6 +317,10 @@ final class WelcomeWindowController: NSWindowController {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
+        // WelcomeWindow is .floating level to stay always-on-top; NSOpenPanel
+        // defaults to .normal (below that), so it would otherwise open
+        // visibly behind this window instead of in front of it.
+        panel.level = .modalPanel
         NSApp.activate()
         panel.begin { [weak self] response in
             self?.isPresenting = false

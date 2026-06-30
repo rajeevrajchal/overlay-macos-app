@@ -22,7 +22,10 @@ protocol FigmaTokenStoring {
 }
 
 /// Persists Figma OAuth tokens in the macOS Keychain, scoped to this app.
-/// Self-only access needs no `keychain-access-groups` entitlement.
+/// Sandboxed apps need an explicit `keychain-access-groups` entitlement
+/// (see overlay-viewer.entitlements) — without one, SecItemAdd fails with
+/// errSecMissingEntitlement and writes silently go nowhere, which looks
+/// exactly like "Connect Figma" working until the app is relaunched.
 final class FigmaKeychainTokenStore: FigmaTokenStoring {
 
     private let service = "np.com.rajeevrajchal.overlay-viewer.figma-oauth"
@@ -42,7 +45,10 @@ final class FigmaKeychainTokenStore: FigmaTokenStoring {
         var attributes = baseQuery
         attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(attributes as CFDictionary, nil)
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        if status != errSecSuccess {
+            NSLog("FigmaKeychainTokenStore: failed to save tokens (OSStatus \(status))")
+        }
     }
 
     func load() -> FigmaTokens? {
@@ -52,7 +58,12 @@ final class FigmaKeychainTokenStore: FigmaTokenStoring {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            if status != errSecSuccess && status != errSecItemNotFound {
+                NSLog("FigmaKeychainTokenStore: failed to load tokens (OSStatus \(status))")
+            }
+            return nil
+        }
         return try? JSONDecoder().decode(FigmaTokens.self, from: data)
     }
 

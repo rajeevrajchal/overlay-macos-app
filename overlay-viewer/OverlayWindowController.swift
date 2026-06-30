@@ -148,6 +148,10 @@ final class OverlayWindowController: NSWindowController {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
+        // The overlay window sits at .floating level to stay always-on-top;
+        // NSOpenPanel defaults to .normal, which is BELOW that, so without
+        // this it visibly opens underneath the overlay instead of in front.
+        panel.level = .modalPanel
 
         NSApp.activate()
         panel.begin { [weak self] response in
