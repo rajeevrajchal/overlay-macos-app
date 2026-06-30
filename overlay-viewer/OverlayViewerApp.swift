@@ -1,14 +1,5 @@
-import SwiftUI
-
-@main
-struct OverlayViewerApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
-    var body: some Scene {
-        // No WindowGroup — this is a menu-bar-driven utility app.
-        // The overlay window is created and owned by AppDelegate -> OverlayWindowController.
-        Settings {
-            EmptyView()
-        }
-    }
-}
+// Intentionally empty.
+// Entry point lives in main.swift — see AppDelegate.swift for launch logic.
+// This file is a leftover from the Xcode SwiftUI template and must not
+// declare @main, App, Scene, or AppDelegate — main.swift already owns
+// the application lifecycle via NSApplication.shared.run().

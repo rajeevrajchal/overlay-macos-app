@@ -224,7 +224,7 @@ final class WelcomeWindowController: NSWindowController {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         panel.begin { [weak self] response in
             self?.isPresenting = false
             guard response == .OK, let url = panel.url else { return }

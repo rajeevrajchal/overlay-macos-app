@@ -1,5 +1,6 @@
 import Cocoa
 import UniformTypeIdentifiers
+import WebKit
 
 
 // MARK: - OverlayContainerView
@@ -111,6 +112,9 @@ final class OverlayWindowController: NSWindowController {
         window.delegate = self
         window.minSize = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
         window.setFrameAutosaveName("OverlayWindowFrame")
+        if !NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
+            window.center()
+        }
 
         self.toolbarRibbon = ribbon
 
@@ -141,7 +145,7 @@ final class OverlayWindowController: NSWindowController {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
 
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             self.load(imageURL: url)
@@ -155,6 +159,8 @@ final class OverlayWindowController: NSWindowController {
     }
 
     func showWelcomeWindow() {
+        NSLog("3. showWelcomeWindow called")                         // >>> CHANGED
+
         if welcomeController == nil {
             let wc = WelcomeWindowController()
             wc.onImagePicked = { [weak self] url in
@@ -166,8 +172,11 @@ final class OverlayWindowController: NSWindowController {
             welcomeController = wc
         }
         welcomeController?.window?.center()
-        welcomeController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate(ignoringOtherApps: true)                       // >>> CHANGED (moved earlier)
+        welcomeController?.window?.makeKeyAndOrderFront(nil)
+        welcomeController?.window?.orderFrontRegardless()
+
+        NSLog("4. Window ordered front, isVisible: \(welcomeController?.window?.isVisible ?? false)") // >>> CHANGED
     }
 
     func presentOpenPanelOrWelcome() {
@@ -237,6 +246,7 @@ final class OverlayWindowController: NSWindowController {
             window?.setContentSize(windowSize)
         }
         window?.center()
+        NSApp.activate(ignoringOtherApps: true)                        // >>> CHANGED
         window?.orderFrontRegardless()
 
         let savedOpacity = persistedOpacity
@@ -270,6 +280,7 @@ final class OverlayWindowController: NSWindowController {
             window?.setContentSize(NSSize(width: savedW, height: savedH))
         }
         window?.center()
+        NSApp.activate(ignoringOtherApps: true)                        // >>> CHANGED
         window?.orderFrontRegardless()
     }
 

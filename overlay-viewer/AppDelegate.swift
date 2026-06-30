@@ -1,15 +1,20 @@
 import Cocoa
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-
     private var statusItem: NSStatusItem!
     private lazy var overlayController = OverlayWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSLog("1. App launched")
         NSApp.setActivationPolicy(.accessory)
         setupStatusItem()
-        if !overlayController.restoreLastImage() {
-            overlayController.showWelcomeWindow()
+        NSLog("2. Status item created: \(statusItem != nil)")
+
+        // Defer so the run loop is ready before we try to show/activate windows
+        DispatchQueue.main.async {
+            if !self.overlayController.restoreLastImage() {
+                self.overlayController.showWelcomeWindow()
+            }
         }
     }
 
@@ -22,12 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Image…",       action: #selector(openImage),                    keyEquivalent: "o")
-        // "Change Image…" removed — available via toolbar ribbon "Change…" button
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Toggle Visibility",  action: #selector(toggleVisibility),             keyEquivalent: "h")
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Quit",               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-
         for item in menu.items { item.target = self }
         statusItem.menu = menu
     }
