@@ -51,6 +51,7 @@ final class WelcomeWindowController: NSWindowController {
         let win = WelcomeWindow()
         self.init(window: win)
         buildUI(in: win)
+        win.delegate = self
         win.center()
     }
 
@@ -139,6 +140,8 @@ final class WelcomeWindowController: NSWindowController {
         let figmaInput = NSTextField()
         figmaInput.placeholderString = "https://figma.com/design/…"
         figmaInput.font = .systemFont(ofSize: 11)
+        figmaInput.isEditable = true
+        figmaInput.isSelectable = true
         figmaInput.target = self
         figmaInput.action = #selector(openFigmaURL)
         figmaInput.translatesAutoresizingMaskIntoConstraints = false
@@ -231,6 +234,18 @@ final class WelcomeWindowController: NSWindowController {
             self?.window?.orderOut(nil)
             self?.onImagePicked?(url)
         }
+    }
+}
+
+
+// MARK: - NSWindowDelegate
+
+extension WelcomeWindowController: NSWindowDelegate {
+    func windowDidBecomeKey(_ notification: Notification) {
+        // Activate the app so keyboard events (typing, Cmd+V) reach the text field.
+        // On macOS 14+, activate() works here because the user just clicked our window,
+        // which provides the required interaction token.
+        NSApp.activate()
     }
 }
 

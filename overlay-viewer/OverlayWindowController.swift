@@ -22,6 +22,7 @@ final class OverlayContainerView: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         layer?.borderWidth = 0.5
     }
+    
 }
 
 
