@@ -89,9 +89,10 @@ final class FigmaOAuthService: NSObject {
     private let httpClient: FigmaHTTPClient
     private let tokenStore: FigmaTokenStoring
 
-    /// Stand-in for "store state server-side keyed to the session": this app
-    /// has exactly one session (itself), so an in-memory property is that store.
-    private var pendingState: String?
+    /// Guards against a second `authenticate()` call overwriting `activeSession`
+    /// — and orphaning the first call's continuation — while one is already
+    /// in flight.
+    private var isAuthenticating = false
 
     init(configuration: FigmaOAuthConfiguration? = .fromEnvironment(),
          httpClient: FigmaHTTPClient = URLSession.shared,
@@ -242,6 +243,9 @@ final class FigmaOAuthService: NSObject {
     @MainActor
     func authenticate() async throws -> FigmaProfile {
         guard configuration != nil else { throw FigmaOAuthError.missingConfiguration }
+        guard !isAuthenticating else { throw FigmaOAuthError.invalidCallback }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
 
         let state = generateState()
         let verifier = generateCodeVerifier()
@@ -250,11 +254,9 @@ final class FigmaOAuthService: NSObject {
         guard let callbackScheme = URL(string: configuration!.redirectURI)?.scheme else {
             throw FigmaOAuthError.missingConfiguration
         }
-        pendingState = state
 
         let callbackURL = try await runWebAuthSession(authURL: authURL, callbackScheme: callbackScheme)
         let code = try validateCallback(callbackURL, expectedState: state)
-        pendingState = nil
 
         let tokenResponse = try await exchangeCodeForToken(code: code, codeVerifier: verifier)
         let tokens = FigmaTokens(

@@ -21,6 +21,20 @@
                ReferencedContainer = "container:overlay-viewer.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4251FEF384358F1D4B0D59E2"
+               BuildableName = "overlay-viewerTests.xctest"
+               BlueprintName = "overlay-viewerTests"
+               ReferencedContainer = "container:overlay-viewer.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -29,6 +43,18 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4251FEF384358F1D4B0D59E2"
+               BuildableName = "overlay-viewerTests.xctest"
+               BlueprintName = "overlay-viewerTests"
+               ReferencedContainer = "container:overlay-viewer.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -59,12 +85,12 @@
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "FIGMA_CLIENT_ID"
-            value = "***REMOVED-FIGMA-CLIENT-ID***"
+            value = "$(FIGMA_CLIENT_ID)"
             isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "FIGMA_CLIENT_SECRET"
-            value = "***REMOVED-FIGMA-CLIENT-SECRET***"
+            value = "$(FIGMA_CLIENT_SECRET)"
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>

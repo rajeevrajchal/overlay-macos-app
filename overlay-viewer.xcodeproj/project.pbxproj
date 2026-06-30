@@ -6,7 +6,34 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2E3303978EF0F586C06E3F91 /* FigmaTokenStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */; };
+		4133EF2497A09CB64E3F815E /* FigmaOAuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */; };
+		4CD1771092E34F93DF0E6D68 /* FigmaAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */; };
+		B860A0E5CE18CBA7EF46AF50 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4264DAAA62F3BF8FD33C75B6 /* Cocoa.framework */; };
+		CCF96620AA6C4F9B4D3AF7FB /* FigmaURLParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */; };
+		F4DC54D4D0A0E4C0A4C0C785 /* Mocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDE44028E5ADCDDD999A134 /* Mocks.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		86344E407BA15B158726C36C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FC91272E2FEA706100B66A12 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FC9127352FEA706100B66A12;
+			remoteInfo = "overlay-viewer";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaURLParserTests.swift; sourceTree = "<group>"; };
+		4264DAAA62F3BF8FD33C75B6 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaOAuthServiceTests.swift; sourceTree = "<group>"; };
+		7B53CA4E70C87F791BEE5EFF /* overlay-viewerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "overlay-viewerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8C5382ABB1CC6E46BBFD0D49 /* Local.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Local.xcconfig; path = "overlay-viewer/Local.xcconfig"; sourceTree = SOURCE_ROOT; };
+		AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaTokenStoreTests.swift; sourceTree = "<group>"; };
+		D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaAPIClientTests.swift; sourceTree = "<group>"; };
+		ECDE44028E5ADCDDD999A134 /* Mocks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
 		FC9127362FEA706100B66A12 /* overlay-viewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "overlay-viewer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -15,6 +42,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Local.xcconfig,
 			);
 			target = FC9127352FEA706100B66A12 /* overlay-viewer */;
 		};
@@ -32,6 +60,14 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		9ED7F7D53AB5FA3E339FCC46 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B860A0E5CE18CBA7EF46AF50 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC9127332FEA706100B66A12 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,11 +78,42 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4D45A7884CA7933E2473C617 /* overlay-viewerTests */ = {
+			isa = PBXGroup;
+			children = (
+				4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */,
+				AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */,
+				ECDE44028E5ADCDDD999A134 /* Mocks.swift */,
+				4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */,
+				D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */,
+			);
+			path = "overlay-viewerTests";
+			sourceTree = SOURCE_ROOT;
+		};
+		7A2FD27A67E1208DC50E81CA /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				4264DAAA62F3BF8FD33C75B6 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		AC6708CC35FBE943635B0991 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7A2FD27A67E1208DC50E81CA /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FC91272D2FEA706100B66A12 = {
 			isa = PBXGroup;
 			children = (
 				FC9127382FEA706100B66A12 /* overlay-viewer */,
 				FC9127372FEA706100B66A12 /* Products */,
+				AC6708CC35FBE943635B0991 /* Frameworks */,
+				4D45A7884CA7933E2473C617 /* overlay-viewerTests */,
+				8C5382ABB1CC6E46BBFD0D49 /* Local.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -54,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				FC9127362FEA706100B66A12 /* overlay-viewer.app */,
+				7B53CA4E70C87F791BEE5EFF /* overlay-viewerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +129,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		4251FEF384358F1D4B0D59E2 /* overlay-viewerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A7A488450AEB26EC8EFFC5D /* Build configuration list for PBXNativeTarget "overlay-viewerTests" */;
+			buildPhases = (
+				129FCE931079D45810CBC637 /* Sources */,
+				9ED7F7D53AB5FA3E339FCC46 /* Frameworks */,
+				508547686A5EBE540ABDC935 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				714388AC0371D05B783C0FBF /* PBXTargetDependency */,
+			);
+			name = "overlay-viewerTests";
+			productName = "overlay-viewerTests";
+			productReference = 7B53CA4E70C87F791BEE5EFF /* overlay-viewerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		FC9127352FEA706100B66A12 /* overlay-viewer */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FC9127412FEA706200B66A12 /* Build configuration list for PBXNativeTarget "overlay-viewer" */;
@@ -77,8 +163,6 @@
 				FC9127382FEA706100B66A12 /* overlay-viewer */,
 			);
 			name = "overlay-viewer";
-			packageProductDependencies = (
-			);
 			productName = "overlay-viewer";
 			productReference = FC9127362FEA706100B66A12 /* overlay-viewer.app */;
 			productType = "com.apple.product-type.application";
@@ -113,11 +197,19 @@
 			projectRoot = "";
 			targets = (
 				FC9127352FEA706100B66A12 /* overlay-viewer */,
+				4251FEF384358F1D4B0D59E2 /* overlay-viewerTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		508547686A5EBE540ABDC935 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC9127342FEA706100B66A12 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,6 +220,18 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		129FCE931079D45810CBC637 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CCF96620AA6C4F9B4D3AF7FB /* FigmaURLParserTests.swift in Sources */,
+				2E3303978EF0F586C06E3F91 /* FigmaTokenStoreTests.swift in Sources */,
+				F4DC54D4D0A0E4C0A4C0C785 /* Mocks.swift in Sources */,
+				4133EF2497A09CB64E3F815E /* FigmaOAuthServiceTests.swift in Sources */,
+				4CD1771092E34F93DF0E6D68 /* FigmaAPIClientTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC9127322FEA706100B66A12 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,7 +241,58 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		714388AC0371D05B783C0FBF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "overlay-viewer";
+			target = FC9127352FEA706100B66A12 /* overlay-viewer */;
+			targetProxy = 86344E407BA15B158726C36C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		4013DF7A9D1A6909DB6496DF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = BSFF9CHKM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = "np.com.rajeevrajchal.overlay-viewerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/overlay-viewer.app/Contents/MacOS/overlay-viewer";
+			};
+			name = Release;
+		};
+		E590F1B7F72134EE53394803 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = BSFF9CHKM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = "np.com.rajeevrajchal.overlay-viewerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/overlay-viewer.app/Contents/MacOS/overlay-viewer";
+			};
+			name = Debug;
+		};
 		FC91273F2FEA706200B66A12 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -264,6 +419,7 @@
 		};
 		FC9127422FEA706200B66A12 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8C5382ABB1CC6E46BBFD0D49 /* Local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -329,6 +485,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2A7A488450AEB26EC8EFFC5D /* Build configuration list for PBXNativeTarget "overlay-viewerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4013DF7A9D1A6909DB6496DF /* Release */,
+				E590F1B7F72134EE53394803 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FC9127312FEA706100B66A12 /* Build configuration list for PBXProject "overlay-viewer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

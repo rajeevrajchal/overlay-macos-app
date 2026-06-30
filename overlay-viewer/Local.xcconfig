@@ -1,0 +1,7 @@
+// Pulls FIGMA_CLIENT_ID / FIGMA_CLIENT_SECRET from the gitignored .env at
+// the repo root into Xcode build settings, so the shared scheme can
+// reference them as $(FIGMA_CLIENT_ID) / $(FIGMA_CLIENT_SECRET) instead of
+// containing the real values. `#include?` is optional — a fresh clone with
+// no .env yet still builds fine; Figma just stays unconfigured (see
+// FigmaOAuthConfiguration.fromEnvironment).
+#include? "../.env"

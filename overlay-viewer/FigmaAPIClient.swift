@@ -57,6 +57,12 @@ final class FigmaAPIClient {
     /// the embed iframe has no way to accept a bearer token, so it could
     /// never see private files; a real rendered image fetched with the
     /// token can.
+    /// Render images larger than this are rejected rather than handed to
+    /// NSImage — Figma's own API is semi-trusted, but an unbounded payload
+    /// (proxy issue, compromised CDN, malformed response) shouldn't be able
+    /// to balloon memory unchecked.
+    private static let maxImageBytes = 50 * 1024 * 1024
+
     func fetchRenderedImage(fileKey: String, nodeID: String?) async throws -> NSImage {
         let imageURLString = try await fetchImageURLString(fileKey: fileKey, nodeID: nodeID)
         guard let imageURL = URL(string: imageURLString) else { throw FigmaAPIError.invalidResponse }
@@ -64,20 +70,25 @@ final class FigmaAPIClient {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FigmaAPIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
+        guard data.count <= Self.maxImageBytes else { throw FigmaAPIError.invalidResponse }
         guard let image = NSImage(data: data) else { throw FigmaAPIError.invalidResponse }
         return image
     }
 
     private func fetchImageURLString(fileKey: String, nodeID: String?) async throws -> String {
+        guard let encodedFileKey = fileKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw FigmaAPIError.invalidResponse
+        }
         if let nodeID {
             let data = try await authorizedRequest { token in
-                var components = URLComponents(string: "https://api.figma.com/v1/images/\(fileKey)")!
+                var components = URLComponents(string: "https://api.figma.com/v1/images/\(encodedFileKey)")!
                 components.queryItems = [
                     URLQueryItem(name: "ids", value: nodeID),
                     URLQueryItem(name: "format", value: "png"),
                     URLQueryItem(name: "scale", value: "2"),
                 ]
-                var request = URLRequest(url: components.url!)
+                guard let url = components.url else { throw FigmaAPIError.invalidResponse }
+                var request = URLRequest(url: url)
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 return request
             }
@@ -89,7 +100,10 @@ final class FigmaAPIClient {
             return urlString
         } else {
             let data = try await authorizedRequest { token in
-                var request = URLRequest(url: URL(string: "https://api.figma.com/v1/files/\(fileKey)?depth=1")!)
+                var components = URLComponents(string: "https://api.figma.com/v1/files/\(encodedFileKey)")!
+                components.queryItems = [URLQueryItem(name: "depth", value: "1")]
+                guard let url = components.url else { throw FigmaAPIError.invalidResponse }
+                var request = URLRequest(url: url)
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 return request
             }
@@ -104,9 +118,9 @@ final class FigmaAPIClient {
 
     // MARK: - Authorized request with one transparent refresh-and-retry
 
-    private func authorizedRequest(_ build: @escaping (String) -> URLRequest) async throws -> Data {
+    private func authorizedRequest(_ build: @escaping (String) throws -> URLRequest) async throws -> Data {
         let token = try await oauth.validAccessToken()
-        let (data, response) = try await httpClient.send(build(token))
+        let (data, response) = try await httpClient.send(try build(token))
         guard let http = response as? HTTPURLResponse else { throw FigmaAPIError.invalidResponse }
 
         if http.statusCode == 401 {

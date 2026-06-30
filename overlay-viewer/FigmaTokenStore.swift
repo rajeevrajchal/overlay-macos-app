@@ -40,7 +40,10 @@ final class FigmaKeychainTokenStore: FigmaTokenStoring {
     }
 
     func save(_ tokens: FigmaTokens) {
-        guard let data = try? JSONEncoder().encode(tokens) else { return }
+        guard let data = try? JSONEncoder().encode(tokens) else {
+            NSLog("FigmaKeychainTokenStore: failed to encode tokens")
+            return
+        }
         SecItemDelete(baseQuery as CFDictionary)
         var attributes = baseQuery
         attributes[kSecValueData as String] = data
@@ -64,7 +67,12 @@ final class FigmaKeychainTokenStore: FigmaTokenStoring {
             }
             return nil
         }
-        return try? JSONDecoder().decode(FigmaTokens.self, from: data)
+        do {
+            return try JSONDecoder().decode(FigmaTokens.self, from: data)
+        } catch {
+            NSLog("FigmaKeychainTokenStore: failed to decode stored tokens")
+            return nil
+        }
     }
 
     func clear() {
