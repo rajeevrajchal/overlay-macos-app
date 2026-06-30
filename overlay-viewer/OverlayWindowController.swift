@@ -21,6 +21,7 @@ final class OverlayContainerView: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         layer?.borderWidth = 0.5
     }
+    
 }
 
 
@@ -60,10 +61,15 @@ final class OverlayWindowController: NSWindowController {
     private var opacitySlider: NSSlider?
     private var settingsPopover: NSPopover?
 
-    private static let opacityKey      = "overlay.opacity"
-    private static let lastImageKey    = "overlay.lastImageURL"
-    private static let customWidthKey  = "overlay.customWidth"
-    private static let customHeightKey = "overlay.customHeight"
+    private enum ContentMode { case none, image }
+    private var contentMode: ContentMode = .none
+
+    private static let opacityKey          = "overlay.opacity"
+    private static let lastImageKey        = "overlay.lastImageURL"
+    private static let lastFigmaFileKeyKey = "overlay.lastFigmaFileKey"
+    private static let lastFigmaNodeIDKey  = "overlay.lastFigmaNodeID"
+    private static let customWidthKey      = "overlay.customWidth"
+    private static let customHeightKey     = "overlay.customHeight"
 
     // MARK: - Init
 
@@ -99,6 +105,9 @@ final class OverlayWindowController: NSWindowController {
         window.delegate = self
         window.minSize = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
         window.setFrameAutosaveName("OverlayWindowFrame")
+        if !NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
+            window.center()
+        }
 
         self.toolbarRibbon = ribbon
 
@@ -129,7 +138,7 @@ final class OverlayWindowController: NSWindowController {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
 
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             self.load(imageURL: url)
@@ -137,26 +146,34 @@ final class OverlayWindowController: NSWindowController {
     }
 
     func showOpenPanelIfNeeded() {
-        if canvasView.image == nil {
+        if contentMode == .none {
             presentOpenPanel()
         }
     }
 
     func showWelcomeWindow() {
+        NSLog("3. showWelcomeWindow called")                         // >>> CHANGED
+
         if welcomeController == nil {
             let wc = WelcomeWindowController()
             wc.onImagePicked = { [weak self] url in
                 self?.load(imageURL: url)
             }
+            wc.onFigmaResourceLoaded = { [weak self] image, resource in
+                self?.load(figmaImage: image, resource: resource)
+            }
             welcomeController = wc
         }
         welcomeController?.window?.center()
-        welcomeController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate(ignoringOtherApps: true)                       // >>> CHANGED (moved earlier)
+        welcomeController?.window?.makeKeyAndOrderFront(nil)
+        welcomeController?.window?.orderFrontRegardless()
+
+        NSLog("4. Window ordered front, isVisible: \(welcomeController?.window?.isVisible ?? false)") // >>> CHANGED
     }
 
     func presentOpenPanelOrWelcome() {
-        if canvasView.image == nil {
+        if contentMode == .none {
             showWelcomeWindow()
         } else {
             presentOpenPanel()
@@ -165,6 +182,8 @@ final class OverlayWindowController: NSWindowController {
 
     func clearAndReopen() {
         canvasView.image = nil
+        contentMode = .none
+        clearPersistedFigmaResource()
         window?.orderOut(nil)
         presentOpenPanel()
     }
@@ -180,6 +199,21 @@ final class OverlayWindowController: NSWindowController {
 
     @discardableResult
     func restoreLastImage() -> Bool {
+        if let fileKey = UserDefaults.standard.string(forKey: Self.lastFigmaFileKeyKey),
+           FigmaOAuthService.shared.isConnected {
+            let nodeID = UserDefaults.standard.string(forKey: Self.lastFigmaNodeIDKey)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    let image = try await FigmaAPIClient.shared.fetchRenderedImage(fileKey: fileKey, nodeID: nodeID)
+                    self.load(figmaImage: image, resource: FigmaURLParser.Resource(fileKey: fileKey, nodeID: nodeID))
+                } catch {
+                    self.clearPersistedFigmaResource()
+                    self.showWelcomeWindow()
+                }
+            }
+            return true
+        }
         guard let urlString = UserDefaults.standard.string(forKey: Self.lastImageKey),
               let url = URL(string: urlString),
               FileManager.default.fileExists(atPath: url.path) else { return false }
@@ -192,8 +226,34 @@ final class OverlayWindowController: NSWindowController {
     private func load(imageURL: URL) {
         guard let image = NSImage(contentsOf: imageURL) else { return }
         welcomeController?.window?.orderOut(nil)
+        canvasView.isHidden = false
         canvasView.image = image
+        contentMode = .image
+        clearPersistedFigmaResource()
+        presentLoadedImage(image)
+        UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
+    }
 
+    // MARK: - Figma loading
+
+    /// Renders a Figma file/node fetched via FigmaAPIClient (using the
+    /// connected user's OAuth token) the same way as any other static image.
+    func load(figmaImage image: NSImage, resource: FigmaURLParser.Resource) {
+        welcomeController?.window?.orderOut(nil)
+        canvasView.isHidden = false
+        canvasView.image = image
+        contentMode = .image
+        UserDefaults.standard.removeObject(forKey: Self.lastImageKey)
+        UserDefaults.standard.set(resource.fileKey, forKey: Self.lastFigmaFileKeyKey)
+        if let nodeID = resource.nodeID {
+            UserDefaults.standard.set(nodeID, forKey: Self.lastFigmaNodeIDKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
+        }
+        presentLoadedImage(image)
+    }
+
+    private func presentLoadedImage(_ image: NSImage) {
         let savedW = UserDefaults.standard.double(forKey: Self.customWidthKey)
         let savedH = UserDefaults.standard.double(forKey: Self.customHeightKey)
         if savedW > 0 && savedH > 0 {
@@ -208,14 +268,18 @@ final class OverlayWindowController: NSWindowController {
             window?.setContentSize(windowSize)
         }
         window?.center()
+        NSApp.activate(ignoringOtherApps: true)
         window?.orderFrontRegardless()
 
         let savedOpacity = persistedOpacity
         window?.alphaValue = 1.0
         canvasView.alphaValue = CGFloat(savedOpacity)
         opacitySlider?.doubleValue = savedOpacity
+    }
 
-        UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
+    private func clearPersistedFigmaResource() {
+        UserDefaults.standard.removeObject(forKey: Self.lastFigmaFileKeyKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
     }
 
     // MARK: - Persistence
@@ -321,7 +385,7 @@ final class OverlayWindowController: NSWindowController {
     // MARK: - Size Settings
 
     private func reapplyImageSize() {
-        guard let image = canvasView.image else { return }
+        guard contentMode == .image, let image = canvasView.image else { return }
         let maxDimension: CGFloat = 800
         let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
         let size = NSSize(
@@ -375,14 +439,17 @@ final class OverlayWindowController: NSWindowController {
     }
 
     @objc private func removeImageAction() {
-        guard canvasView.image != nil else { return }
+        guard contentMode != .none else { return }
         canvasView.image = nil
+        contentMode = .none
+        clearPersistedFigmaResource()
         window?.orderOut(nil)
         showWelcomeWindow()
     }
 
     @objc private func windowOpacityChanged(_ sender: NSSlider) {
-        canvasView.alphaValue = CGFloat(sender.doubleValue)
+        let v = CGFloat(sender.doubleValue)
+        canvasView.alphaValue = v
         persistedOpacity = sender.doubleValue
     }
 }
