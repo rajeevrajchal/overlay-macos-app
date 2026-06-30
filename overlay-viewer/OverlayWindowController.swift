@@ -1,6 +1,5 @@
 import Cocoa
 import UniformTypeIdentifiers
-import WebKit
 
 
 // MARK: - OverlayContainerView
@@ -56,21 +55,21 @@ final class ToolbarRibbonView: NSVisualEffectView {
 final class OverlayWindowController: NSWindowController {
 
     private let canvasView = ImageCanvasView()
-    private let figmaCanvasView = FigmaCanvasView()
     private var toolbarRibbon: ToolbarRibbonView?
     private var welcomeController: WelcomeWindowController?
     private var keyMonitor: Any?
     private var opacitySlider: NSSlider?
     private var settingsPopover: NSPopover?
 
-    private enum ContentMode { case none, image, figma }
+    private enum ContentMode { case none, image }
     private var contentMode: ContentMode = .none
 
-    private static let opacityKey      = "overlay.opacity"
-    private static let lastImageKey    = "overlay.lastImageURL"
-    private static let lastFigmaURLKey = "overlay.lastFigmaURL"
-    private static let customWidthKey  = "overlay.customWidth"
-    private static let customHeightKey = "overlay.customHeight"
+    private static let opacityKey          = "overlay.opacity"
+    private static let lastImageKey        = "overlay.lastImageURL"
+    private static let lastFigmaFileKeyKey = "overlay.lastFigmaFileKey"
+    private static let lastFigmaNodeIDKey  = "overlay.lastFigmaNodeID"
+    private static let customWidthKey      = "overlay.customWidth"
+    private static let customHeightKey     = "overlay.customHeight"
 
     // MARK: - Init
 
@@ -86,10 +85,8 @@ final class OverlayWindowController: NSWindowController {
         let ribbon = buildToolbarRibbon()
         ribbon.translatesAutoresizingMaskIntoConstraints = false
         canvasView.translatesAutoresizingMaskIntoConstraints = false
-        figmaCanvasView.isHidden = true
 
         container.addSubview(canvasView)
-        container.addSubview(figmaCanvasView)
         container.addSubview(ribbon)
 
         NSLayoutConstraint.activate([
@@ -102,11 +99,6 @@ final class OverlayWindowController: NSWindowController {
             canvasView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             canvasView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-            figmaCanvasView.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
-            figmaCanvasView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            figmaCanvasView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            figmaCanvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
         window.contentView = container
@@ -167,8 +159,8 @@ final class OverlayWindowController: NSWindowController {
             wc.onImagePicked = { [weak self] url in
                 self?.load(imageURL: url)
             }
-            wc.onFigmaURLEntered = { [weak self] url in
-                self?.load(figmaURL: url)
+            wc.onFigmaResourceLoaded = { [weak self] image, resource in
+                self?.load(figmaImage: image, resource: resource)
             }
             welcomeController = wc
         }
@@ -190,10 +182,8 @@ final class OverlayWindowController: NSWindowController {
 
     func clearAndReopen() {
         canvasView.image = nil
-        figmaCanvasView.stopLoading()
-        figmaCanvasView.isHidden = true
         contentMode = .none
-        UserDefaults.standard.removeObject(forKey: Self.lastFigmaURLKey)
+        clearPersistedFigmaResource()
         window?.orderOut(nil)
         presentOpenPanel()
     }
@@ -209,9 +199,19 @@ final class OverlayWindowController: NSWindowController {
 
     @discardableResult
     func restoreLastImage() -> Bool {
-        if let urlString = UserDefaults.standard.string(forKey: Self.lastFigmaURLKey),
-           let url = URL(string: urlString) {
-            load(figmaURL: url)
+        if let fileKey = UserDefaults.standard.string(forKey: Self.lastFigmaFileKeyKey),
+           FigmaOAuthService.shared.isConnected {
+            let nodeID = UserDefaults.standard.string(forKey: Self.lastFigmaNodeIDKey)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    let image = try await FigmaAPIClient.shared.fetchRenderedImage(fileKey: fileKey, nodeID: nodeID)
+                    self.load(figmaImage: image, resource: FigmaURLParser.Resource(fileKey: fileKey, nodeID: nodeID))
+                } catch {
+                    self.clearPersistedFigmaResource()
+                    self.showWelcomeWindow()
+                }
+            }
             return true
         }
         guard let urlString = UserDefaults.standard.string(forKey: Self.lastImageKey),
@@ -226,13 +226,34 @@ final class OverlayWindowController: NSWindowController {
     private func load(imageURL: URL) {
         guard let image = NSImage(contentsOf: imageURL) else { return }
         welcomeController?.window?.orderOut(nil)
-        figmaCanvasView.stopLoading()
-        figmaCanvasView.isHidden = true
         canvasView.isHidden = false
         canvasView.image = image
         contentMode = .image
-        UserDefaults.standard.removeObject(forKey: Self.lastFigmaURLKey)
+        clearPersistedFigmaResource()
+        presentLoadedImage(image)
+        UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
+    }
 
+    // MARK: - Figma loading
+
+    /// Renders a Figma file/node fetched via FigmaAPIClient (using the
+    /// connected user's OAuth token) the same way as any other static image.
+    func load(figmaImage image: NSImage, resource: FigmaURLParser.Resource) {
+        welcomeController?.window?.orderOut(nil)
+        canvasView.isHidden = false
+        canvasView.image = image
+        contentMode = .image
+        UserDefaults.standard.removeObject(forKey: Self.lastImageKey)
+        UserDefaults.standard.set(resource.fileKey, forKey: Self.lastFigmaFileKeyKey)
+        if let nodeID = resource.nodeID {
+            UserDefaults.standard.set(nodeID, forKey: Self.lastFigmaNodeIDKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
+        }
+        presentLoadedImage(image)
+    }
+
+    private func presentLoadedImage(_ image: NSImage) {
         let savedW = UserDefaults.standard.double(forKey: Self.customWidthKey)
         let savedH = UserDefaults.standard.double(forKey: Self.customHeightKey)
         if savedW > 0 && savedH > 0 {
@@ -247,42 +268,18 @@ final class OverlayWindowController: NSWindowController {
             window?.setContentSize(windowSize)
         }
         window?.center()
-        NSApp.activate(ignoringOtherApps: true)                        // >>> CHANGED
+        NSApp.activate(ignoringOtherApps: true)
         window?.orderFrontRegardless()
 
         let savedOpacity = persistedOpacity
         window?.alphaValue = 1.0
         canvasView.alphaValue = CGFloat(savedOpacity)
         opacitySlider?.doubleValue = savedOpacity
-
-        UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
     }
 
-    // MARK: - Figma loading
-
-    func load(figmaURL url: URL) {
-        welcomeController?.window?.orderOut(nil)
-        canvasView.image = nil
-        canvasView.isHidden = true
-        figmaCanvasView.isHidden = false
-        figmaCanvasView.loadFigmaURL(url)
-        contentMode = .figma
-        UserDefaults.standard.removeObject(forKey: Self.lastImageKey)
-        UserDefaults.standard.set(url.absoluteString, forKey: Self.lastFigmaURLKey)
-
-        let savedOpacity = persistedOpacity
-        window?.alphaValue = 1.0
-        figmaCanvasView.alphaValue = CGFloat(savedOpacity)
-        opacitySlider?.doubleValue = savedOpacity
-
-        let savedW = UserDefaults.standard.double(forKey: Self.customWidthKey)
-        let savedH = UserDefaults.standard.double(forKey: Self.customHeightKey)
-        if savedW > 0 && savedH > 0 {
-            window?.setContentSize(NSSize(width: savedW, height: savedH))
-        }
-        window?.center()
-        NSApp.activate(ignoringOtherApps: true)                        // >>> CHANGED
-        window?.orderFrontRegardless()
+    private func clearPersistedFigmaResource() {
+        UserDefaults.standard.removeObject(forKey: Self.lastFigmaFileKeyKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
     }
 
     // MARK: - Persistence
@@ -444,10 +441,8 @@ final class OverlayWindowController: NSWindowController {
     @objc private func removeImageAction() {
         guard contentMode != .none else { return }
         canvasView.image = nil
-        figmaCanvasView.stopLoading()
-        figmaCanvasView.isHidden = true
         contentMode = .none
-        UserDefaults.standard.removeObject(forKey: Self.lastFigmaURLKey)
+        clearPersistedFigmaResource()
         window?.orderOut(nil)
         showWelcomeWindow()
     }
@@ -455,7 +450,6 @@ final class OverlayWindowController: NSWindowController {
     @objc private func windowOpacityChanged(_ sender: NSSlider) {
         let v = CGFloat(sender.doubleValue)
         canvasView.alphaValue = v
-        figmaCanvasView.alphaValue = v
         persistedOpacity = sender.doubleValue
     }
 }

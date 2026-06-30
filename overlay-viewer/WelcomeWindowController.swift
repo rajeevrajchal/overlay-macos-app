@@ -43,9 +43,13 @@ private final class FrostedEffectView: NSVisualEffectView {
 final class WelcomeWindowController: NSWindowController {
 
     var onImagePicked: ((URL) -> Void)?
-    var onFigmaURLEntered: ((URL) -> Void)?
+    var onFigmaResourceLoaded: ((NSImage, FigmaURLParser.Resource) -> Void)?
     private var isPresenting = false
     private var figmaField: NSTextField?
+    private var figmaOpenButton: NSButton?
+    private var figmaErrorLabel: NSTextField?
+    private let connectView = FigmaConnectView()
+    private static let figmaHandleKey = "overlay.figmaHandle"
 
     convenience init() {
         let win = WelcomeWindow()
@@ -53,6 +57,7 @@ final class WelcomeWindowController: NSWindowController {
         buildUI(in: win)
         win.delegate = self
         win.center()
+        refreshConnectState(animated: false)
     }
 
     // MARK: - UI Construction
@@ -108,10 +113,8 @@ final class WelcomeWindowController: NSWindowController {
         }
 
         let iconView = NSImageView()
-        iconView.image = NSImage(systemSymbolName: "photo.on.rectangle.angled",
-                                  accessibilityDescription: nil)
+        iconView.image = NSImage(named: "AppLogo")
         iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.contentTintColor = NSColor.white.withAlphaComponent(0.7)
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
         let label = NSTextField(labelWithString: "Click to open an image")
@@ -130,6 +133,10 @@ final class WelcomeWindowController: NSWindowController {
         let separator = NSBox()
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
+
+        connectView.translatesAutoresizingMaskIntoConstraints = false
+        connectView.onConnectTapped = { [weak self] in self?.connectFigma() }
+        connectView.onDisconnectTapped = { [weak self] in self?.disconnectFigma() }
 
         let figmaPrompt = NSTextField(labelWithString: "Or paste a Figma URL")
         figmaPrompt.alignment = .center
@@ -150,14 +157,26 @@ final class WelcomeWindowController: NSWindowController {
         let figmaBtn = NSButton(title: "Open", target: self, action: #selector(openFigmaURL))
         figmaBtn.bezelStyle = .rounded
         figmaBtn.translatesAutoresizingMaskIntoConstraints = false
+        self.figmaOpenButton = figmaBtn
+
+        let errorLabel = NSTextField(labelWithString: "")
+        errorLabel.alignment = .center
+        errorLabel.textColor = NSColor.systemOrange
+        errorLabel.font = .systemFont(ofSize: 10)
+        errorLabel.lineBreakMode = .byWordWrapping
+        errorLabel.maximumNumberOfLines = 2
+        errorLabel.translatesAutoresizingMaskIntoConstraints = false
+        self.figmaErrorLabel = errorLabel
 
         body.addSubview(iconView)
         body.addSubview(label)
         body.addSubview(dragLabel)
         body.addSubview(separator)
+        body.addSubview(connectView)
         body.addSubview(figmaPrompt)
         body.addSubview(figmaInput)
         body.addSubview(figmaBtn)
+        body.addSubview(errorLabel)
         effect.addSubview(body)
 
         NSLayoutConstraint.activate([
@@ -186,7 +205,12 @@ final class WelcomeWindowController: NSWindowController {
             separator.leadingAnchor.constraint(equalTo: body.leadingAnchor, constant: 20),
             separator.trailingAnchor.constraint(equalTo: body.trailingAnchor, constant: -20),
 
-            figmaPrompt.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 12),
+            connectView.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 12),
+            connectView.centerXAnchor.constraint(equalTo: body.centerXAnchor),
+            connectView.leadingAnchor.constraint(greaterThanOrEqualTo: body.leadingAnchor, constant: 20),
+            connectView.trailingAnchor.constraint(lessThanOrEqualTo: body.trailingAnchor, constant: -20),
+
+            figmaPrompt.topAnchor.constraint(equalTo: connectView.bottomAnchor, constant: 12),
             figmaPrompt.centerXAnchor.constraint(equalTo: body.centerXAnchor),
 
             figmaInput.topAnchor.constraint(equalTo: figmaPrompt.bottomAnchor, constant: 8),
@@ -196,6 +220,10 @@ final class WelcomeWindowController: NSWindowController {
             figmaBtn.centerYAnchor.constraint(equalTo: figmaInput.centerYAnchor),
             figmaBtn.trailingAnchor.constraint(equalTo: body.trailingAnchor, constant: -20),
             figmaBtn.widthAnchor.constraint(equalToConstant: 50),
+
+            errorLabel.topAnchor.constraint(equalTo: figmaInput.bottomAnchor, constant: 6),
+            errorLabel.leadingAnchor.constraint(equalTo: body.leadingAnchor, constant: 20),
+            errorLabel.trailingAnchor.constraint(equalTo: body.trailingAnchor, constant: -20),
         ])
 
         // 4. Resize handle overlay (must be added LAST so it's on top)
@@ -211,12 +239,74 @@ final class WelcomeWindowController: NSWindowController {
     }
 
     @objc private func openFigmaURL() {
+        clearFigmaError()
         let raw = (figmaField?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
-        guard !raw.isEmpty,
-              let url = URL(string: raw),
-              FigmaCanvasView.isFigmaURL(url) else { return }
-        window?.orderOut(nil)
-        onFigmaURLEntered?(url)
+        guard !raw.isEmpty, let url = URL(string: raw), let resource = FigmaURLParser.parse(url) else {
+            showFigmaError("That doesn't look like a Figma file URL.")
+            return
+        }
+        guard FigmaOAuthService.shared.isConnected else {
+            showFigmaError("Connect Figma above first, then paste the URL.")
+            return
+        }
+
+        figmaOpenButton?.isEnabled = false
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.figmaOpenButton?.isEnabled = true }
+            do {
+                let image = try await FigmaAPIClient.shared.fetchRenderedImage(
+                    fileKey: resource.fileKey, nodeID: resource.nodeID
+                )
+                self.window?.orderOut(nil)
+                self.onFigmaResourceLoaded?(image, resource)
+            } catch {
+                self.showFigmaError(error.localizedDescription)
+            }
+        }
+    }
+
+    // MARK: - Figma connect / disconnect
+
+    private func connectFigma() {
+        clearFigmaError()
+        connectView.setState(.connecting)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let profile = try await FigmaOAuthService.shared.authenticate()
+                UserDefaults.standard.set(profile.handle, forKey: Self.figmaHandleKey)
+                self.connectView.setState(.connected(handle: profile.handle))
+            } catch FigmaOAuthError.userCancelled {
+                self.connectView.setState(.disconnected)
+            } catch {
+                self.connectView.setState(.disconnected)
+                self.showFigmaError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func disconnectFigma() {
+        FigmaOAuthService.shared.disconnect()
+        UserDefaults.standard.removeObject(forKey: Self.figmaHandleKey)
+        connectView.setState(.disconnected)
+    }
+
+    private func refreshConnectState(animated: Bool) {
+        if FigmaOAuthService.shared.isConnected,
+           let handle = UserDefaults.standard.string(forKey: Self.figmaHandleKey) {
+            connectView.setState(.connected(handle: handle), animated: animated)
+        } else {
+            connectView.setState(.disconnected, animated: animated)
+        }
+    }
+
+    private func showFigmaError(_ message: String) {
+        figmaErrorLabel?.stringValue = message
+    }
+
+    private func clearFigmaError() {
+        figmaErrorLabel?.stringValue = ""
     }
 
     func presentOpenPanel() {
@@ -246,6 +336,7 @@ extension WelcomeWindowController: NSWindowDelegate {
         // On macOS 14+, activate() works here because the user just clicked our window,
         // which provides the required interaction token.
         NSApp.activate()
+        refreshConnectState(animated: false)
     }
 }
 
