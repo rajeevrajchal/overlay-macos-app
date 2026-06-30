@@ -43,7 +43,9 @@ private final class FrostedEffectView: NSVisualEffectView {
 final class WelcomeWindowController: NSWindowController {
 
     var onImagePicked: ((URL) -> Void)?
+    var onFigmaURLEntered: ((URL) -> Void)?
     private var isPresenting = false
+    private var figmaField: NSTextField?
 
     convenience init() {
         let win = WelcomeWindow()
@@ -123,9 +125,36 @@ final class WelcomeWindowController: NSWindowController {
         dragLabel.font = .systemFont(ofSize: 11)
         dragLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        // Figma URL section
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+
+        let figmaPrompt = NSTextField(labelWithString: "Or paste a Figma URL")
+        figmaPrompt.alignment = .center
+        figmaPrompt.textColor = NSColor.white.withAlphaComponent(0.55)
+        figmaPrompt.font = .systemFont(ofSize: 11)
+        figmaPrompt.translatesAutoresizingMaskIntoConstraints = false
+
+        let figmaInput = NSTextField()
+        figmaInput.placeholderString = "https://figma.com/design/…"
+        figmaInput.font = .systemFont(ofSize: 11)
+        figmaInput.target = self
+        figmaInput.action = #selector(openFigmaURL)
+        figmaInput.translatesAutoresizingMaskIntoConstraints = false
+        self.figmaField = figmaInput
+
+        let figmaBtn = NSButton(title: "Open", target: self, action: #selector(openFigmaURL))
+        figmaBtn.bezelStyle = .rounded
+        figmaBtn.translatesAutoresizingMaskIntoConstraints = false
+
         body.addSubview(iconView)
         body.addSubview(label)
         body.addSubview(dragLabel)
+        body.addSubview(separator)
+        body.addSubview(figmaPrompt)
+        body.addSubview(figmaInput)
+        body.addSubview(figmaBtn)
         effect.addSubview(body)
 
         NSLayoutConstraint.activate([
@@ -134,8 +163,9 @@ final class WelcomeWindowController: NSWindowController {
             body.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
             body.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
 
+            // Icon shifted up (-30 vs old +20) to make room for the Figma section below
             iconView.centerXAnchor.constraint(equalTo: body.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: body.centerYAnchor, constant: 20),
+            iconView.centerYAnchor.constraint(equalTo: body.centerYAnchor, constant: -30),
             iconView.widthAnchor.constraint(equalToConstant: 80),
             iconView.heightAnchor.constraint(equalToConstant: 80),
 
@@ -148,6 +178,21 @@ final class WelcomeWindowController: NSWindowController {
             dragLabel.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 6),
             dragLabel.leadingAnchor.constraint(greaterThanOrEqualTo: body.leadingAnchor, constant: 20),
             dragLabel.trailingAnchor.constraint(lessThanOrEqualTo: body.trailingAnchor, constant: -20),
+
+            separator.topAnchor.constraint(equalTo: dragLabel.bottomAnchor, constant: 20),
+            separator.leadingAnchor.constraint(equalTo: body.leadingAnchor, constant: 20),
+            separator.trailingAnchor.constraint(equalTo: body.trailingAnchor, constant: -20),
+
+            figmaPrompt.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 12),
+            figmaPrompt.centerXAnchor.constraint(equalTo: body.centerXAnchor),
+
+            figmaInput.topAnchor.constraint(equalTo: figmaPrompt.bottomAnchor, constant: 8),
+            figmaInput.leadingAnchor.constraint(equalTo: body.leadingAnchor, constant: 20),
+            figmaInput.trailingAnchor.constraint(equalTo: figmaBtn.leadingAnchor, constant: -8),
+
+            figmaBtn.centerYAnchor.constraint(equalTo: figmaInput.centerYAnchor),
+            figmaBtn.trailingAnchor.constraint(equalTo: body.trailingAnchor, constant: -20),
+            figmaBtn.widthAnchor.constraint(equalToConstant: 50),
         ])
 
         // 4. Resize handle overlay (must be added LAST so it's on top)
@@ -160,6 +205,15 @@ final class WelcomeWindowController: NSWindowController {
 
     @objc private func closeWelcome() {
         window?.orderOut(nil)
+    }
+
+    @objc private func openFigmaURL() {
+        let raw = (figmaField?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty,
+              let url = URL(string: raw),
+              FigmaCanvasView.isFigmaURL(url) else { return }
+        window?.orderOut(nil)
+        onFigmaURLEntered?(url)
     }
 
     func presentOpenPanel() {
