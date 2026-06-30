@@ -4,55 +4,66 @@ import UniformTypeIdentifiers
 
 // MARK: - OverlayContainerView
 
-/// Root content view of OverlayWindow.
-/// Owns the black border (via CALayer) and hosts the toolbar ribbon + canvas.
 final class OverlayContainerView: NSView {
     override var isOpaque: Bool { false }
+    override var wantsUpdateLayer: Bool { true }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
+    override init(frame: NSRect) {
+        super.init(frame: frame)
         wantsLayer = true
-        layer?.borderColor = NSColor.black.cgColor
-        layer?.borderWidth = 1.5
-        // backgroundColor stays nil (inherits window's clear background)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateLayer() {
+        layer?.cornerRadius = 8
+        layer?.masksToBounds = true
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        layer?.borderWidth = 0.5
     }
 }
 
 
 // MARK: - ToolbarRibbonView
 
-/// 36pt tall strip at the top of OverlayWindow.
-/// Background: semi-transparent dark; always fully drawn (opacity independent of image opacity).
-/// Draggable: does NOT intercept mouse events in non-control areas,
-/// allowing isMovableByWindowBackground to handle window dragging.
-final class ToolbarRibbonView: NSView {
+final class ToolbarRibbonView: NSVisualEffectView {
 
     static let height: CGFloat = 36
 
     override var isOpaque: Bool { false }
 
-    override func draw(_ dirtyRect: NSRect) {
-        // Semi-transparent dark ribbon background
-        NSColor.black.withAlphaComponent(0.45).setFill()
-        bounds.fill()
+    init() {
+        super.init(frame: .zero)
+        material = .menu
+        blendingMode = .behindWindow
+        state = .active
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = 8
+        layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
     }
 }
 
 
 // MARK: - OverlayWindowController
 
-/// Owns the OverlayWindow's lifecycle and exposes the user-facing controls:
-/// open image, window opacity, visibility toggle.
-///
-/// This is the ONLY class that knows about both OverlayWindow and ImageCanvasView —
-/// that's intentional. Everything else in the app talks to this controller, never
-/// directly to the window or the view. One seam, easy to test, easy to extend.
 final class OverlayWindowController: NSWindowController {
 
     private let canvasView = ImageCanvasView()
     private var toolbarRibbon: ToolbarRibbonView?
-    // toolbarWindow is DELETED — toolbar is now embedded in the overlay window
     private var welcomeController: WelcomeWindowController?
+    private var keyMonitor: Any?
+    private var opacitySlider: NSSlider?
+    private var settingsPopover: NSPopover?
+
+    private static let opacityKey      = "overlay.opacity"
+    private static let lastImageKey    = "overlay.lastImageURL"
+    private static let customWidthKey  = "overlay.customWidth"
+    private static let customHeightKey = "overlay.customHeight"
 
     // MARK: - Init
 
@@ -60,39 +71,54 @@ final class OverlayWindowController: NSWindowController {
         let window = OverlayWindow()
         self.init(window: window)
 
-        // Container: full-size root view that holds the border
         let container = OverlayContainerView(
             frame: NSRect(x: 0, y: 0, width: 600, height: 400)
         )
         container.autoresizingMask = [.width, .height]
 
-        // Ribbon: 36pt top strip
-        let ribbonHeight = ToolbarRibbonView.height
         let ribbon = buildToolbarRibbon()
-        ribbon.frame = NSRect(
-            x: 0,
-            y: container.bounds.height - ribbonHeight,
-            width: container.bounds.width,
-            height: ribbonHeight
-        )
-        ribbon.autoresizingMask = [.width, .minYMargin]
-
-        // Canvas: fills below ribbon
-        canvasView.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: container.bounds.width,
-            height: container.bounds.height - ribbonHeight
-        )
-        canvasView.autoresizingMask = [.width, .height]
+        ribbon.translatesAutoresizingMaskIntoConstraints = false
+        canvasView.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(canvasView)
         container.addSubview(ribbon)
+
+        NSLayoutConstraint.activate([
+            ribbon.topAnchor.constraint(equalTo: container.topAnchor),
+            ribbon.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            ribbon.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            ribbon.heightAnchor.constraint(equalToConstant: ToolbarRibbonView.height),
+
+            canvasView.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
+            canvasView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            canvasView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            canvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
         window.contentView = container
         window.delegate = self
-        window.minSize = NSSize(width: 400, height: ribbonHeight + 60)
+        window.minSize = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
+        window.setFrameAutosaveName("OverlayWindowFrame")
 
         self.toolbarRibbon = ribbon
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            switch (event.keyCode, event.modifierFlags.contains(.command)) {
+            case (53, _):    // Escape
+                self.window?.orderOut(nil)
+                return nil
+            case (31, true): // Cmd+O
+                self.presentOpenPanelOrWelcome()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    deinit {
+        if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
     }
 
     // MARK: - Public API
@@ -103,23 +129,19 @@ final class OverlayWindowController: NSWindowController {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
 
+        NSApp.activate(ignoringOtherApps: true)
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             self.load(imageURL: url)
         }
     }
 
-    // NOTE: This method is no longer called externally.
-    // Use showWelcomeWindow() for first-launch flow.
-    // Kept for potential internal testing/fallback use.
     func showOpenPanelIfNeeded() {
         if canvasView.image == nil {
             presentOpenPanel()
         }
     }
 
-    /// Shows the Welcome Box centered on screen.
-    /// Called on launch (if no image loaded) and from "Open Image…" menu when no image is loaded.
     func showWelcomeWindow() {
         if welcomeController == nil {
             let wc = WelcomeWindowController()
@@ -133,8 +155,6 @@ final class OverlayWindowController: NSWindowController {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// If an image is already loaded, open the raw file picker (mid-session "replace" feel).
-    /// If no image is loaded, show the Welcome Box (onboarding feel).
     func presentOpenPanelOrWelcome() {
         if canvasView.image == nil {
             showWelcomeWindow()
@@ -146,8 +166,6 @@ final class OverlayWindowController: NSWindowController {
     func clearAndReopen() {
         canvasView.image = nil
         window?.orderOut(nil)
-        // NOTE: toolbar ribbon remains in window — it will be visible when window returns.
-        // This is intentional: the ribbon is always present.
         presentOpenPanel()
     }
 
@@ -155,96 +173,201 @@ final class OverlayWindowController: NSWindowController {
         guard let window else { return }
         if window.isVisible {
             window.orderOut(nil)
-            // Toolbar is embedded — hides with the window automatically
         } else {
             window.orderFrontRegardless()
-            // Toolbar is embedded — shows with the window automatically
         }
+    }
+
+    @discardableResult
+    func restoreLastImage() -> Bool {
+        guard let urlString = UserDefaults.standard.string(forKey: Self.lastImageKey),
+              let url = URL(string: urlString),
+              FileManager.default.fileExists(atPath: url.path) else { return false }
+        load(imageURL: url)
+        return true
     }
 
     // MARK: - Image loading
 
     private func load(imageURL: URL) {
         guard let image = NSImage(contentsOf: imageURL) else { return }
-        welcomeController?.window?.orderOut(nil)  // dismiss welcome box on successful load
+        welcomeController?.window?.orderOut(nil)
         canvasView.image = image
 
-        // Size the window to the image's native aspect ratio, capped to something reasonable.
-        let maxDimension: CGFloat = 800
-        let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
-        // Account for ribbon height in window size — canvas should be image-sized, not window-sized
-        let ribbonHeight = ToolbarRibbonView.height
-        let windowSize = NSSize(
-            width: image.size.width * scale,
-            height: image.size.height * scale + ribbonHeight   // +36pt for ribbon
-        )
-
-        window?.setContentSize(windowSize)
+        let savedW = UserDefaults.standard.double(forKey: Self.customWidthKey)
+        let savedH = UserDefaults.standard.double(forKey: Self.customHeightKey)
+        if savedW > 0 && savedH > 0 {
+            window?.setContentSize(NSSize(width: savedW, height: savedH))
+        } else {
+            let maxDimension: CGFloat = 800
+            let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
+            let windowSize = NSSize(
+                width: image.size.width * scale,
+                height: image.size.height * scale + ToolbarRibbonView.height
+            )
+            window?.setContentSize(windowSize)
+        }
         window?.center()
         window?.orderFrontRegardless()
-        // showToolbar() REMOVED — toolbar ribbon always present since init
+
+        let savedOpacity = persistedOpacity
+        window?.alphaValue = 1.0
+        canvasView.alphaValue = CGFloat(savedOpacity)
+        opacitySlider?.doubleValue = savedOpacity
+
+        UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
+    }
+
+    // MARK: - Persistence
+
+    private var persistedOpacity: Double {
+        get {
+            let v = UserDefaults.standard.double(forKey: Self.opacityKey)
+            return v == 0 ? 1.0 : v.clamped(to: 0.1...1.0)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: Self.opacityKey) }
     }
 
     // MARK: - Build Toolbar Ribbon
 
     private func buildToolbarRibbon() -> ToolbarRibbonView {
-        let ribbon = ToolbarRibbonView(frame: .zero)  // frame set by caller
+        let ribbon = ToolbarRibbonView()
 
-        // Close button
-        let closeBtn = NSButton(frame: NSRect(x: 8, y: 7, width: 28, height: 22))
-        closeBtn.title = "×"
-        closeBtn.bezelStyle = .rounded
-        closeBtn.font = .systemFont(ofSize: 14, weight: .bold)
-        closeBtn.contentTintColor = .white
+        let closeBtn = NSButton()
+        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close overlay")
+        closeBtn.title = ""
+        closeBtn.bezelStyle = .circular
+        closeBtn.isBordered = false
+        closeBtn.contentTintColor = NSColor.white.withAlphaComponent(0.85)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
         closeBtn.target = self
         closeBtn.action = #selector(closeOverlay)
-        closeBtn.autoresizingMask = []
 
-        // Change Image button
-        let changeBtn = NSButton(frame: NSRect(x: 44, y: 7, width: 76, height: 22))
+        let changeBtn = NSButton()
         changeBtn.title = "Change…"
         changeBtn.bezelStyle = .rounded
+        changeBtn.isBordered = false
+        changeBtn.contentTintColor = .white
         changeBtn.font = .systemFont(ofSize: 11)
+        changeBtn.translatesAutoresizingMaskIntoConstraints = false
         changeBtn.target = self
         changeBtn.action = #selector(changeImageAction)
-        changeBtn.autoresizingMask = []
 
-        // Remove Image button
-        let removeBtn = NSButton(frame: NSRect(x: 128, y: 7, width: 76, height: 22))
+        let removeBtn = NSButton()
         removeBtn.title = "Remove"
         removeBtn.bezelStyle = .rounded
+        removeBtn.isBordered = false
+        removeBtn.contentTintColor = .white
         removeBtn.font = .systemFont(ofSize: 11)
+        removeBtn.translatesAutoresizingMaskIntoConstraints = false
         removeBtn.target = self
         removeBtn.action = #selector(removeImageAction)
-        removeBtn.autoresizingMask = []
 
-        // Opacity label
         let opacityLabel = NSTextField(labelWithString: "Opacity")
-        opacityLabel.frame = NSRect(x: 212, y: 10, width: 52, height: 16)
         opacityLabel.textColor = .white
         opacityLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        opacityLabel.autoresizingMask = []
+        opacityLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Opacity slider (fixed 120pt width)
-        let opacitySlider = NSSlider(
-            value: 1.0, minValue: 0.05, maxValue: 1.0,
+        let slider = NSSlider(
+            value: 1.0, minValue: 0.1, maxValue: 1.0,
             target: self, action: #selector(windowOpacityChanged(_:))
         )
-        opacitySlider.frame = NSRect(x: 268, y: 8, width: 120, height: 20)
-        opacitySlider.isContinuous = true
-        opacitySlider.autoresizingMask = []   // fixed width — does not stretch with window
+        slider.isContinuous = true
+        slider.translatesAutoresizingMaskIntoConstraints = false
+        self.opacitySlider = slider
 
-        [closeBtn, changeBtn, removeBtn, opacityLabel, opacitySlider]
-            .forEach { ribbon.addSubview($0) }
+        let settingsBtn = NSButton()
+        settingsBtn.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        settingsBtn.title = ""
+        settingsBtn.bezelStyle = .circular
+        settingsBtn.isBordered = false
+        settingsBtn.contentTintColor = NSColor.white.withAlphaComponent(0.85)
+        settingsBtn.translatesAutoresizingMaskIntoConstraints = false
+        settingsBtn.target = self
+        settingsBtn.action = #selector(openSettingsAction(_:))
+
+        let leadingStack = NSStackView(views: [closeBtn, changeBtn, removeBtn, settingsBtn])
+        leadingStack.orientation = .horizontal
+        leadingStack.spacing = 8
+        leadingStack.alignment = .centerY
+        leadingStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let trailingStack = NSStackView(views: [opacityLabel, slider])
+        trailingStack.orientation = .horizontal
+        trailingStack.spacing = 6
+        trailingStack.alignment = .centerY
+        trailingStack.translatesAutoresizingMaskIntoConstraints = false
+
+        ribbon.addSubview(leadingStack)
+        ribbon.addSubview(trailingStack)
+
+        NSLayoutConstraint.activate([
+            closeBtn.widthAnchor.constraint(equalToConstant: 22),
+            closeBtn.heightAnchor.constraint(equalToConstant: 22),
+            settingsBtn.widthAnchor.constraint(equalToConstant: 22),
+            settingsBtn.heightAnchor.constraint(equalToConstant: 22),
+            slider.widthAnchor.constraint(equalToConstant: 120),
+
+            leadingStack.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor, constant: 10),
+            leadingStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
+
+            trailingStack.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor, constant: -10),
+            trailingStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
+        ])
 
         return ribbon
     }
 
-    // MARK: - Toolbar Ribbon Actions
+    // MARK: - Size Settings
+
+    private func reapplyImageSize() {
+        guard let image = canvasView.image else { return }
+        let maxDimension: CGFloat = 800
+        let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
+        let size = NSSize(
+            width:  image.size.width  * scale,
+            height: image.size.height * scale + ToolbarRibbonView.height
+        )
+        window?.setContentSize(size)
+        window?.center()
+    }
+
+    @objc private func openSettingsAction(_ sender: NSButton) {
+        if settingsPopover == nil {
+            let vc = SizeSettingsViewController()
+            vc.onApply = { [weak self] w, h in
+                guard let self, let window = self.window else { return }
+                let clamped = NSSize(width: max(400, w), height: max(96, h))
+                window.setContentSize(clamped)
+                window.center()
+                UserDefaults.standard.set(Double(clamped.width),  forKey: Self.customWidthKey)
+                UserDefaults.standard.set(Double(clamped.height), forKey: Self.customHeightKey)
+                self.settingsPopover?.close()
+            }
+            vc.onReset = { [weak self] in
+                guard let self else { return }
+                UserDefaults.standard.removeObject(forKey: Self.customWidthKey)
+                UserDefaults.standard.removeObject(forKey: Self.customHeightKey)
+                self.reapplyImageSize()
+                self.settingsPopover?.close()
+            }
+            let pop = NSPopover()
+            pop.contentViewController = vc
+            pop.behavior = .transient
+            pop.contentSize = NSSize(width: 240, height: 110)
+            settingsPopover = pop
+        }
+        if let vc = settingsPopover?.contentViewController as? SizeSettingsViewController,
+           let size = window?.contentView?.frame.size {
+            vc.currentSize = size
+        }
+        settingsPopover?.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+    }
+
+    // MARK: - Actions
 
     @objc private func closeOverlay() {
         window?.orderOut(nil)
-        // Does NOT quit the app — matches "Toggle Visibility" semantics
     }
 
     @objc private func changeImageAction() {
@@ -252,20 +375,28 @@ final class OverlayWindowController: NSWindowController {
     }
 
     @objc private func removeImageAction() {
-        guard canvasView.image != nil else { return }   // no-op if already in empty state
+        guard canvasView.image != nil else { return }
         canvasView.image = nil
         window?.orderOut(nil)
-        showWelcomeWindow()   // returns to initial empty/placeholder state
+        showWelcomeWindow()
     }
 
     @objc private func windowOpacityChanged(_ sender: NSSlider) {
-        window?.alphaValue = CGFloat(sender.doubleValue)
+        canvasView.alphaValue = CGFloat(sender.doubleValue)
+        persistedOpacity = sender.doubleValue
     }
 }
 
+
 // MARK: - NSWindowDelegate
 
-extension OverlayWindowController: NSWindowDelegate {
-    // No delegate methods needed — ribbon is embedded and resizes via autoresizingMask.
-    // Conformance is retained because window.delegate = self is set in init.
+extension OverlayWindowController: NSWindowDelegate {}
+
+
+// MARK: - Helpers
+
+private extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        Swift.max(range.lowerBound, Swift.min(range.upperBound, self))
+    }
 }

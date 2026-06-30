@@ -3,12 +3,14 @@ import Cocoa
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
-    private let overlayController = OverlayWindowController()
+    private lazy var overlayController = OverlayWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupStatusItem()
-        overlayController.showWelcomeWindow()
+        if !overlayController.restoreLastImage() {
+            overlayController.showWelcomeWindow()
+        }
     }
 
     private func setupStatusItem() {

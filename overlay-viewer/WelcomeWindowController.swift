@@ -4,8 +4,6 @@ import UniformTypeIdentifiers
 
 // MARK: - WelcomeWindow
 
-/// A borderless, frosted-glass floating window used as the app's launch/welcome screen.
-/// Resizable from all 8 directions via `ResizeHandleView`.
 final class WelcomeWindow: NSWindow {
 
     override var canBecomeKey: Bool { true }
@@ -30,17 +28,21 @@ final class WelcomeWindow: NSWindow {
 }
 
 
+// MARK: - FrostedEffectView
+
+private final class FrostedEffectView: NSVisualEffectView {
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = 12
+    }
+}
+
+
 // MARK: - WelcomeWindowController
 
-/// Controls the Welcome Box lifecycle.
-/// Shows a frosted-glass prompt asking the user to click to open an image.
 final class WelcomeWindowController: NSWindowController {
 
-    /// Called when the user successfully picks an image.
-    /// `OverlayWindowController` sets this before showing the window.
     var onImagePicked: ((URL) -> Void)?
-
-    /// Guards against opening two file pickers simultaneously.
     private var isPresenting = false
 
     convenience init() {
@@ -54,52 +56,99 @@ final class WelcomeWindowController: NSWindowController {
 
     private func buildUI(in win: NSWindow) {
         // 1. Root frosted-glass container
-        let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 300, height: 500))
+        let effect = FrostedEffectView(frame: NSRect(x: 0, y: 0, width: 300, height: 500))
         effect.material = .hudWindow
         effect.blendingMode = .behindWindow
         effect.state = .active
-        effect.wantsLayer = true
-        effect.layer?.cornerRadius = 12
         effect.autoresizingMask = [.width, .height]
         win.contentView = effect
 
-        // 2. Ribbon (top strip, 40 pt tall)
+        // 2. Ribbon (top strip, 40pt tall)
         let ribbonHeight: CGFloat = 40
-        let ribbon = RibbonView(frame: NSRect(x: 0, y: 460, width: 300, height: ribbonHeight))
-        ribbon.autoresizingMask = [.width, .minYMargin]  // pins to top
-        // Close button inside ribbon
-        let closeBtn = NSButton(frame: NSRect(x: 8, y: 8, width: 24, height: 24))
+        let ribbon = RibbonView()
+        ribbon.translatesAutoresizingMaskIntoConstraints = false
+
+        let closeBtn = NSButton()
         closeBtn.bezelStyle = .circular
         closeBtn.title = "\u{00D7}"
         closeBtn.font = .systemFont(ofSize: 14, weight: .bold)
         closeBtn.contentTintColor = .white
+        closeBtn.isBordered = false
         closeBtn.target = self
         closeBtn.action = #selector(closeWelcome)
-        closeBtn.autoresizingMask = []
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+
         ribbon.addSubview(closeBtn)
         effect.addSubview(ribbon)
 
-        // 3. Body (below ribbon)
-        let body = ClickableBodyView(frame: NSRect(x: 0, y: 0, width: 300, height: 460))
-        body.autoresizingMask = [.width, .height]
+        NSLayoutConstraint.activate([
+            ribbon.topAnchor.constraint(equalTo: effect.topAnchor),
+            ribbon.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+            ribbon.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+            ribbon.heightAnchor.constraint(equalToConstant: ribbonHeight),
+
+            closeBtn.widthAnchor.constraint(equalToConstant: 24),
+            closeBtn.heightAnchor.constraint(equalToConstant: 24),
+            closeBtn.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor, constant: 8),
+            closeBtn.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
+        ])
+
+        // 3. Body (fills space below ribbon)
+        let body = ClickableBodyView()
+        body.translatesAutoresizingMaskIntoConstraints = false
         body.onClicked = { [weak self] in self?.presentOpenPanel() }
-        // SF Symbol icon
-        let iconView = NSImageView(frame: NSRect(x: 75, y: 230, width: 150, height: 150))
+        body.registerForDraggedTypes([.fileURL])
+        body.onFilesDropped = { [weak self] urls in
+            guard let url = urls.first else { return }
+            self?.window?.orderOut(nil)
+            self?.onImagePicked?(url)
+        }
+
+        let iconView = NSImageView()
         iconView.image = NSImage(systemSymbolName: "photo.on.rectangle.angled",
                                   accessibilityDescription: nil)
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.contentTintColor = NSColor.white.withAlphaComponent(0.7)
-        iconView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
-        body.addSubview(iconView)
-        // Label
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
         let label = NSTextField(labelWithString: "Click to open an image")
-        label.frame = NSRect(x: 20, y: 200, width: 260, height: 24)
         label.alignment = .center
         label.textColor = NSColor.white.withAlphaComponent(0.85)
         label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let dragLabel = NSTextField(labelWithString: "or drag an image here")
+        dragLabel.alignment = .center
+        dragLabel.textColor = NSColor.white.withAlphaComponent(0.55)
+        dragLabel.font = .systemFont(ofSize: 11)
+        dragLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        body.addSubview(iconView)
         body.addSubview(label)
+        body.addSubview(dragLabel)
         effect.addSubview(body)
+
+        NSLayoutConstraint.activate([
+            body.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
+            body.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+            body.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
+
+            iconView.centerXAnchor.constraint(equalTo: body.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: body.centerYAnchor, constant: 20),
+            iconView.widthAnchor.constraint(equalToConstant: 80),
+            iconView.heightAnchor.constraint(equalToConstant: 80),
+
+            label.centerXAnchor.constraint(equalTo: body.centerXAnchor),
+            label.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 14),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: body.leadingAnchor, constant: 20),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: body.trailingAnchor, constant: -20),
+
+            dragLabel.centerXAnchor.constraint(equalTo: body.centerXAnchor),
+            dragLabel.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 6),
+            dragLabel.leadingAnchor.constraint(greaterThanOrEqualTo: body.leadingAnchor, constant: 20),
+            dragLabel.trailingAnchor.constraint(lessThanOrEqualTo: body.trailingAnchor, constant: -20),
+        ])
 
         // 4. Resize handle overlay (must be added LAST so it's on top)
         let resizer = ResizeHandleView(frame: effect.bounds)
@@ -121,6 +170,7 @@ final class WelcomeWindowController: NSWindowController {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
+        NSApp.activate(ignoringOtherApps: true)
         panel.begin { [weak self] response in
             self?.isPresenting = false
             guard response == .OK, let url = panel.url else { return }
@@ -133,7 +183,6 @@ final class WelcomeWindowController: NSWindowController {
 
 // MARK: - RibbonView
 
-/// Slightly darker tinted strip at top — provides visual separation from body.
 private final class RibbonView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.black.withAlphaComponent(0.15).setFill()
@@ -144,25 +193,59 @@ private final class RibbonView: NSView {
 
 // MARK: - ClickableBodyView
 
-/// Captures clicks in the center body area and fires the open panel.
 private final class ClickableBodyView: NSView {
     var onClicked: (() -> Void)?
+    var onFilesDropped: (([URL]) -> Void)?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.borderWidth = 1.5
+        layer?.borderColor = NSColor.clear.cgColor
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
 
     override func mouseDown(with event: NSEvent) {
         onClicked?()
     }
 
-    /// Change cursor to indicate clickability.
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    // MARK: - NSDraggingDestination
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard imageURL(from: sender) != nil else { return [] }
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.4).cgColor
+        return .copy
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        layer?.borderColor = NSColor.clear.cgColor
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        layer?.borderColor = NSColor.clear.cgColor
+        guard let url = imageURL(from: sender) else { return false }
+        onFilesDropped?([url])
+        return true
+    }
+
+    private func imageURL(from info: NSDraggingInfo) -> URL? {
+        guard let urls = info.draggingPasteboard
+            .readObjects(forClasses: [NSURL.self],
+                         options: [.urlReadingFileURLsOnly: true]) as? [URL]
+        else { return nil }
+        return urls.first { NSImage(contentsOf: $0) != nil }
     }
 }
 
 
 // MARK: - ResizeHandleView
 
-/// Transparent overlay that intercepts mouseDown near edges/corners and
-/// resizes the window in the appropriate direction.
 private final class ResizeHandleView: NSView {
 
     private let edgeThreshold: CGFloat = 8
@@ -197,7 +280,6 @@ private final class ResizeHandleView: NSView {
     // MARK: - Hit Testing
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // Only claim the event if the cursor is near an edge
         guard detectEdge(for: point) != .none else { return nil }
         return self
     }

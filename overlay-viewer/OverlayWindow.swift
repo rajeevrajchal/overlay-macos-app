@@ -44,7 +44,7 @@ final class OverlayWindow: NSWindow {
         // Both of these MUST be set, or alphaValue changes do nothing visible.
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.hasShadow = false
+        self.hasShadow = true
 
         // --- Free dragging, no titlebar ---
         self.isMovableByWindowBackground = true
