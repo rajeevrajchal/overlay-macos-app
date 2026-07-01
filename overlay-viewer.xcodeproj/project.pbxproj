@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2E3303978EF0F586C06E3F91 /* FigmaTokenStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */; };
 		4133EF2497A09CB64E3F815E /* FigmaOAuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */; };
+		441987B61239853201D58DE0 /* FigmaProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC2EF1F96FBF96ED8E3930F /* FigmaProviderTests.swift */; };
 		4CD1771092E34F93DF0E6D68 /* FigmaAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */; };
 		B860A0E5CE18CBA7EF46AF50 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4264DAAA62F3BF8FD33C75B6 /* Cocoa.framework */; };
 		CCF96620AA6C4F9B4D3AF7FB /* FigmaURLParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */; };
@@ -31,6 +32,7 @@
 		4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaOAuthServiceTests.swift; sourceTree = "<group>"; };
 		7B53CA4E70C87F791BEE5EFF /* overlay-viewerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "overlay-viewerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8C5382ABB1CC6E46BBFD0D49 /* Local.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Local.xcconfig; path = "overlay-viewer/Local.xcconfig"; sourceTree = SOURCE_ROOT; };
+		9CC2EF1F96FBF96ED8E3930F /* FigmaProviderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaProviderTests.swift; sourceTree = "<group>"; };
 		AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaTokenStoreTests.swift; sourceTree = "<group>"; };
 		D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaAPIClientTests.swift; sourceTree = "<group>"; };
 		ECDE44028E5ADCDDD999A134 /* Mocks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
@@ -78,14 +80,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1F989DFF2FFEBFBEA3A0E426 /* Figma */ = {
+			isa = PBXGroup;
+			children = (
+				D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */,
+				4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */,
+				AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */,
+				4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */,
+				9CC2EF1F96FBF96ED8E3930F /* FigmaProviderTests.swift */,
+			);
+			name = Figma;
+			path = Figma;
+			sourceTree = "<group>";
+		};
 		4D45A7884CA7933E2473C617 /* overlay-viewerTests */ = {
 			isa = PBXGroup;
 			children = (
-				4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */,
-				AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */,
 				ECDE44028E5ADCDDD999A134 /* Mocks.swift */,
-				4E775F3A7B1F3417362D1506 /* FigmaOAuthServiceTests.swift */,
-				D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */,
+				1F989DFF2FFEBFBEA3A0E426 /* Figma */,
 			);
 			path = "overlay-viewerTests";
 			sourceTree = SOURCE_ROOT;
@@ -229,6 +241,7 @@
 				F4DC54D4D0A0E4C0A4C0C785 /* Mocks.swift in Sources */,
 				4133EF2497A09CB64E3F815E /* FigmaOAuthServiceTests.swift in Sources */,
 				4CD1771092E34F93DF0E6D68 /* FigmaAPIClientTests.swift in Sources */,
+				441987B61239853201D58DE0 /* FigmaProviderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

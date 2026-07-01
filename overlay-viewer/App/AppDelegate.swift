@@ -2,7 +2,8 @@ import Cocoa
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private lazy var overlayController = OverlayWindowController()
+    private let environment = AppEnvironment()
+    private lazy var overlayController = OverlayWindowController(environment: environment)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("1. App launched")

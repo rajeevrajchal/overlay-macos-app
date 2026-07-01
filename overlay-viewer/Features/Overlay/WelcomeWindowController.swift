@@ -43,7 +43,8 @@ private final class FrostedEffectView: NSVisualEffectView {
 final class WelcomeWindowController: NSWindowController {
 
     var onImagePicked: ((URL) -> Void)?
-    var onFigmaResourceLoaded: ((NSImage, FigmaURLParser.Resource) -> Void)?
+    var onProviderImageLoaded: ((NSImage) -> Void)?
+    private let environment: AppEnvironment
     private var isPresenting = false
     private var figmaField: NSTextField?
     private var figmaOpenButton: NSButton?
@@ -51,14 +52,17 @@ final class WelcomeWindowController: NSWindowController {
     private let connectView = FigmaConnectView()
     private static let figmaHandleKey = "overlay.figmaHandle"
 
-    convenience init() {
+    init(environment: AppEnvironment) {
+        self.environment = environment
         let win = WelcomeWindow()
-        self.init(window: win)
+        super.init(window: win)
         buildUI(in: win)
         win.delegate = self
         win.center()
         refreshConnectState(animated: false)
     }
+
+    required init?(coder: NSCoder) { fatalError() }
 
     // MARK: - UI Construction
 
@@ -241,11 +245,11 @@ final class WelcomeWindowController: NSWindowController {
     @objc private func openFigmaURL() {
         clearFigmaError()
         let raw = (figmaField?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
-        guard !raw.isEmpty, let url = URL(string: raw), let resource = FigmaURLParser.parse(url) else {
+        guard !raw.isEmpty, let url = URL(string: raw), environment.figmaProvider.canHandle(url: url) else {
             showFigmaError("That doesn't look like a Figma file URL.")
             return
         }
-        guard FigmaOAuthService.shared.isConnected else {
+        guard environment.figmaProvider.isConnected else {
             showFigmaError("Connect Figma above first, then paste the URL.")
             return
         }
@@ -255,11 +259,9 @@ final class WelcomeWindowController: NSWindowController {
             guard let self else { return }
             defer { self.figmaOpenButton?.isEnabled = true }
             do {
-                let image = try await FigmaAPIClient.shared.fetchRenderedImage(
-                    fileKey: resource.fileKey, nodeID: resource.nodeID
-                )
+                let image = try await self.environment.figmaProvider.fetchImage(from: url)
                 self.window?.orderOut(nil)
-                self.onFigmaResourceLoaded?(image, resource)
+                self.onProviderImageLoaded?(image)
             } catch {
                 self.showFigmaError(error.localizedDescription)
             }
@@ -274,9 +276,9 @@ final class WelcomeWindowController: NSWindowController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let profile = try await FigmaOAuthService.shared.authenticate()
-                UserDefaults.standard.set(profile.handle, forKey: Self.figmaHandleKey)
-                self.connectView.setState(.connected(handle: profile.handle))
+                let handle = try await self.environment.figmaProvider.connect()
+                UserDefaults.standard.set(handle, forKey: Self.figmaHandleKey)
+                self.connectView.setState(.connected(handle: handle))
             } catch FigmaOAuthError.userCancelled {
                 self.connectView.setState(.disconnected)
             } catch {
@@ -287,13 +289,13 @@ final class WelcomeWindowController: NSWindowController {
     }
 
     private func disconnectFigma() {
-        FigmaOAuthService.shared.disconnect()
+        environment.figmaProvider.disconnect()
         UserDefaults.standard.removeObject(forKey: Self.figmaHandleKey)
         connectView.setState(.disconnected)
     }
 
     private func refreshConnectState(animated: Bool) {
-        if FigmaOAuthService.shared.isConnected,
+        if environment.figmaProvider.isConnected,
            let handle = UserDefaults.standard.string(forKey: Self.figmaHandleKey) {
             connectView.setState(.connected(handle: handle), animated: animated)
         } else {

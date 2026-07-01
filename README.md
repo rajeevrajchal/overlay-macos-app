@@ -134,36 +134,75 @@ Keychain (`FigmaTokenStore.swift`), never in `UserDefaults` or logs.
 
 ## Project Structure
 
+Source is grouped by role, not by type — everything about one concern lives together:
+
 ```
 overlay-viewer/
-├── OverlayViewerApp.swift          # SwiftUI App entry point; wires NSApplicationDelegate
-├── AppDelegate.swift               # Menu bar item, status icon, app lifecycle
-├── OverlayWindow.swift             # Borderless floating NSWindow (always-on-top plumbing)
-├── OverlayWindowController.swift   # Main controller: toolbar ribbon, image loading, size persistence
-├── ImageCanvasView.swift           # Pure NSView that draws the image aspect-fitted
-├── WelcomeWindowController.swift   # First-launch screen: click-to-open, drag-and-drop, Connect Figma, URL field
-├── SizeSettingsViewController.swift# Popover with Width/Height fields, Apply, and Reset
-├── FigmaOAuthService.swift         # OAuth2 + PKCE flow, token exchange/refresh, ASWebAuthenticationSession
-├── FigmaTokenStore.swift           # Keychain-backed storage for the access/refresh tokens
-├── FigmaAPIClient.swift            # Authenticated calls to api.figma.com (profile, rendered images), 401-retry
-├── FigmaURLParser.swift            # Extracts file_key/node-id from a pasted Figma URL
-├── FigmaConnectView.swift          # Animated Connect/Connected toggle shown on the welcome screen
-└── Info.plist                      # Physical Info.plist (needed for CFBundleURLTypes / OAuth callback scheme)
+├── App/
+│   ├── main.swift                  # Imperative entry point (NSApplication.shared.run())
+│   ├── AppDelegate.swift           # Menu bar item, status icon, app lifecycle
+│   ├── AppEnvironment.swift        # Composition root: owns/wires the concrete providers
+│   └── OverlayViewerApp.swift      # Intentionally-empty SwiftUI template leftover — must stay empty
+├── Core/
+│   └── DesignSourceProviding.swift # The plugin seam: protocol any design-image source conforms to
+├── Features/
+│   ├── Overlay/                   # Everything the overlay window owns
+│   │   ├── OverlayWindow.swift
+│   │   ├── OverlayWindowController.swift
+│   │   ├── WelcomeWindowController.swift
+│   │   ├── ImageCanvasView.swift
+│   │   ├── ResizeHandleView.swift
+│   │   └── SizeSettingsViewController.swift
+│   └── Figma/                     # The one DesignSourceProviding conformance today
+│       ├── FigmaProvider.swift          # Adapts OAuth+API+URLParser to DesignSourceProviding
+│       ├── FigmaOAuthService.swift      # OAuth2 + PKCE flow, token exchange/refresh
+│       ├── FigmaTokenStore.swift        # Keychain-backed storage for the access/refresh tokens
+│       ├── FigmaAPIClient.swift         # Authenticated calls to api.figma.com, 401-retry
+│       ├── FigmaURLParser.swift         # Extracts file_key/node-id from a pasted Figma URL
+│       └── FigmaConnectView.swift       # Animated Connect/Connected toggle shown on the welcome screen
+├── Info.plist                      # Needed for CFBundleURLTypes / OAuth callback scheme
+├── overlay-viewer.entitlements
+├── Local.xcconfig                  # Optionally pulls FIGMA_CLIENT_ID/SECRET from root .env
+└── Assets.xcassets/
 ```
+
+`overlay-viewer/` is an Xcode "file system synchronized" group, so this layout is exactly
+what Finder/`git mv` shows — no extra Xcode bookkeeping needed to reorganize it further.
 
 ### How the pieces fit together
 
 ```
 AppDelegate
-  └── OverlayWindowController
-        ├── OverlayWindow          (the floating NSWindow)
-        ├── ToolbarRibbonView      (NSVisualEffectView strip at the top)
-        │     └── buttons + opacity slider
-        ├── ImageCanvasView        (fills the area below the ribbon)
-        ├── SizeSettingsViewController  (shown as NSPopover from the gear button)
-        └── WelcomeWindowController     (shown when no image is loaded)
-              └── WelcomeWindow    (frosted-glass drop target)
+  └── AppEnvironment                    (composition root — owns FigmaProvider today)
+        └── OverlayWindowController(environment:)
+              ├── OverlayWindow          (the floating NSWindow)
+              ├── ToolbarRibbonView      (NSVisualEffectView strip at the top)
+              │     └── buttons + opacity slider
+              ├── ImageCanvasView        (fills the area below the ribbon)
+              ├── SizeSettingsViewController  (shown as NSPopover from the gear button)
+              └── WelcomeWindowController(environment:)  (shown when no image is loaded)
+                    └── WelcomeWindow    (frosted-glass drop target)
 ```
+
+Window controllers receive `AppEnvironment` through their initializer instead of reaching
+for `.shared` singletons directly — `FigmaOAuthService.shared`/`FigmaAPIClient.shared` still
+exist as the real defaults `FigmaProvider` wraps, but nothing above the `Features/Figma/`
+layer knows they exist.
+
+### Adding a new design source
+
+Figma is the only thing overlay images come from today, but the seam is generic
+(`Core/DesignSourceProviding.swift`). To add another one (e.g. Sketch, Zeplin, a plain
+URL-image source):
+
+1. Create `Features/<Name>/<Name>Provider.swift` conforming to `DesignSourceProviding`
+   (`canHandle(url:)`, `connect()`, `fetchImage(from:)`, `restoreLastImage()`, etc.) — see
+   `FigmaProvider.swift` for the reference implementation.
+2. Add a property for it to `AppEnvironment` and append it to `providers`.
+3. `WelcomeWindowController` currently hardcodes its Figma-specific UI copy/field; a second
+   provider would mean generalizing that UI to loop over `environment.providers` and ask each
+   `canHandle(url:)` — that generalization hasn't been done yet since there's only one
+   provider to drive it.
 
 ### Key design decisions
 
@@ -173,6 +212,7 @@ AppDelegate
 - **Layer properties deferred to `layout()`** — `NSVisualEffectView` subclasses set `cornerRadius` in `layout()` (not in `init`) to avoid a layout recursion triggered by AppKit's visual-effect layer management during the first Auto Layout pass.
 - **Lazy window controller creation** — `OverlayWindowController` is a `lazy var` on `AppDelegate` so the `NSWindow` is not constructed until `applicationDidFinishLaunching`, avoiding issues with early window creation before `NSApp` is fully initialized.
 - **Figma content is a fetched image, not a live embed** — private Figma files can't be shown via the old `WKWebView` embed iframe (it had no way to carry an OAuth bearer token, and Figma blocks embedding in webviews anyway). Instead, `FigmaAPIClient` fetches a real rendered PNG of the file/frame using the connected user's token, and it's displayed through the same `ImageCanvasView` as any other image.
+- **Providers own their own persistence** — `FigmaProvider` persists its own "last opened resource" (`overlay.lastFigmaFileKey`/`overlay.lastFigmaNodeID`) instead of `OverlayWindowController` knowing Figma has a fileKey/nodeID at all, so the window layer only ever deals in `NSImage`.
 
 ---
 

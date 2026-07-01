@@ -103,6 +103,7 @@ final class FigmaOAuthService: NSObject {
     }
 
     var isConnected: Bool { tokenStore.load() != nil }
+    var isConfigured: Bool { configuration != nil }
 
     // MARK: - PKCE / state
 

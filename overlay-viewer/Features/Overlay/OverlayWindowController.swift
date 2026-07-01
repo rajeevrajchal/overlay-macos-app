@@ -54,6 +54,7 @@ final class ToolbarRibbonView: NSVisualEffectView {
 
 final class OverlayWindowController: NSWindowController {
 
+    private let environment: AppEnvironment
     private let canvasView = ImageCanvasView()
     private var toolbarRibbon: ToolbarRibbonView?
     private var welcomeController: WelcomeWindowController?
@@ -67,17 +68,16 @@ final class OverlayWindowController: NSWindowController {
 
     private static let opacityKey          = "overlay.opacity"
     private static let lastImageKey        = "overlay.lastImageURL"
-    private static let lastFigmaFileKeyKey = "overlay.lastFigmaFileKey"
-    private static let lastFigmaNodeIDKey  = "overlay.lastFigmaNodeID"
     private static let customWidthKey      = "overlay.customWidth"
     private static let customHeightKey     = "overlay.customHeight"
     private static let minWindowSize       = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
 
     // MARK: - Init
 
-    convenience init() {
+    init(environment: AppEnvironment) {
+        self.environment = environment
         let window = OverlayWindow()
-        self.init(window: window)
+        super.init(window: window)
 
         let container = OverlayContainerView(
             frame: NSRect(x: 0, y: 0, width: 600, height: 400)
@@ -137,6 +137,8 @@ final class OverlayWindowController: NSWindowController {
         }
     }
 
+    required init?(coder: NSCoder) { fatalError() }
+
     deinit {
         if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
     }
@@ -170,12 +172,12 @@ final class OverlayWindowController: NSWindowController {
         NSLog("3. showWelcomeWindow called")                         // >>> CHANGED
 
         if welcomeController == nil {
-            let wc = WelcomeWindowController()
+            let wc = WelcomeWindowController(environment: environment)
             wc.onImagePicked = { [weak self] url in
                 self?.load(imageURL: url)
             }
-            wc.onFigmaResourceLoaded = { [weak self] image, resource in
-                self?.load(figmaImage: image, resource: resource)
+            wc.onProviderImageLoaded = { [weak self] image in
+                self?.load(providerImage: image)
             }
             welcomeController = wc
         }
@@ -198,7 +200,7 @@ final class OverlayWindowController: NSWindowController {
     func clearAndReopen() {
         canvasView.image = nil
         contentMode = .none
-        clearPersistedFigmaResource()
+        environment.figmaProvider.clearLastImage()
         window?.orderOut(nil)
         presentOpenPanel()
     }
@@ -214,22 +216,19 @@ final class OverlayWindowController: NSWindowController {
 
     @discardableResult
     func restoreLastImage() -> Bool {
-        if let fileKey = UserDefaults.standard.string(forKey: Self.lastFigmaFileKeyKey),
-           FigmaOAuthService.shared.isConnected {
-            let nodeID = UserDefaults.standard.string(forKey: Self.lastFigmaNodeIDKey)
+        if environment.figmaProvider.hasPersistedImage {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    let image = try await FigmaAPIClient.shared.fetchRenderedImage(fileKey: fileKey, nodeID: nodeID)
-                    self.load(
-                        figmaImage: image,
-                        resource: FigmaURLParser.Resource(fileKey: fileKey, nodeID: nodeID),
-                        resetCustomSize: false
-                    )
+                    if let image = try await self.environment.figmaProvider.restoreLastImage() {
+                        self.load(providerImage: image, resetCustomSize: false)
+                        return
+                    }
                 } catch {
-                    self.clearPersistedFigmaResource()
-                    self.showWelcomeWindow()
+                    // fall through to clear + show welcome below
                 }
+                self.environment.figmaProvider.clearLastImage()
+                self.showWelcomeWindow()
             }
             return true
         }
@@ -248,27 +247,20 @@ final class OverlayWindowController: NSWindowController {
         canvasView.isHidden = false
         canvasView.image = image
         contentMode = .image
-        clearPersistedFigmaResource()
+        environment.figmaProvider.clearLastImage()
         presentLoadedImage(image, resetCustomSize: resetCustomSize)
         UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
     }
 
-    // MARK: - Figma loading
-
-    /// Renders a Figma file/node fetched via FigmaAPIClient (using the
-    /// connected user's OAuth token) the same way as any other static image.
-    func load(figmaImage image: NSImage, resource: FigmaURLParser.Resource, resetCustomSize: Bool = true) {
+    /// Presents an image fetched through a DesignSourceProviding (Figma
+    /// today), the same way as any other static image. The provider itself
+    /// already persisted whatever it needs to restore this on relaunch.
+    func load(providerImage image: NSImage, resetCustomSize: Bool = true) {
         welcomeController?.window?.orderOut(nil)
         canvasView.isHidden = false
         canvasView.image = image
         contentMode = .image
         UserDefaults.standard.removeObject(forKey: Self.lastImageKey)
-        UserDefaults.standard.set(resource.fileKey, forKey: Self.lastFigmaFileKeyKey)
-        if let nodeID = resource.nodeID {
-            UserDefaults.standard.set(nodeID, forKey: Self.lastFigmaNodeIDKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
-        }
         presentLoadedImage(image, resetCustomSize: resetCustomSize)
     }
 
@@ -306,11 +298,6 @@ final class OverlayWindowController: NSWindowController {
         window?.alphaValue = 1.0
         canvasView.alphaValue = CGFloat(savedOpacity)
         opacitySlider?.doubleValue = savedOpacity
-    }
-
-    private func clearPersistedFigmaResource() {
-        UserDefaults.standard.removeObject(forKey: Self.lastFigmaFileKeyKey)
-        UserDefaults.standard.removeObject(forKey: Self.lastFigmaNodeIDKey)
     }
 
     // MARK: - Persistence
@@ -485,7 +472,7 @@ final class OverlayWindowController: NSWindowController {
         guard contentMode != .none else { return }
         canvasView.image = nil
         contentMode = .none
-        clearPersistedFigmaResource()
+        environment.figmaProvider.clearLastImage()
         window?.orderOut(nil)
         showWelcomeWindow()
     }
