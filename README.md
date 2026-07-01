@@ -96,6 +96,26 @@ Right-click (or click) the menu bar icon for quick access to:
 
 No package dependencies, no build scripts — just standard AppKit/SwiftUI.
 
+**One-time setup after cloning:** `brew install swiftlint`, then
+`git config core.hooksPath .githooks` — wires in the pre-commit lint gate
+(see [Linting](#linting) below). Both are per-clone local settings, not
+tracked by git, so every fresh clone needs to run them once.
+
+---
+
+## Linting
+
+[SwiftLint](https://github.com/realm/SwiftLint) runs as a git pre-commit hook
+(`.githooks/pre-commit`, wired via `git config core.hooksPath .githooks` —
+see Building above). It only checks staged `.swift` files, and only
+**error**-severity violations block the commit; warnings are printed but
+don't. `.swiftlint.yml` deliberately keeps this to bug-catching rules
+(`force_cast`/`force_try` as errors, `force_unwrapping` as a warning) rather
+than house style — see the comments in that file for why.
+
+Bypass with `git commit --no-verify` if you genuinely need to (not
+recommended). Run `swiftlint lint` directly any time to see the full report.
+
 ---
 
 ## Figma OAuth Setup

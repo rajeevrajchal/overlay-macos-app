@@ -57,3 +57,7 @@ Dependencies/
 
 # SwiftLint / SwiftFormat cache
 .swiftlint_cache/
+
+#IDE
+.claude/
+.DS_Store

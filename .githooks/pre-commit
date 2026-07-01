@@ -1,0 +1,36 @@
+#!/bin/bash
+# Blocks a commit if SwiftLint reports any error-severity violation in the
+# staged Swift files (warnings are printed but don't block — see
+# .swiftlint.yml for what's an error vs a warning and why).
+#
+# One-time setup after cloning: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+    echo "warning: swiftlint not installed (brew install swiftlint) — skipping lint check" >&2
+    exit 0
+fi
+
+staged_swift_files=$(git diff --cached --name-only --diff-filter=ACM -- '*.swift')
+
+if [ -z "$staged_swift_files" ]; then
+    exit 0
+fi
+
+failed=0
+while IFS= read -r file; do
+    [ -f "$file" ] || continue
+    if ! swiftlint lint --quiet "$file"; then
+        failed=1
+    fi
+done <<< "$staged_swift_files"
+
+if [ "$failed" -ne 0 ]; then
+    echo "" >&2
+    echo "SwiftLint found errors in staged files — commit blocked. Fix them or run" >&2
+    echo "'git commit --no-verify' to bypass (not recommended)." >&2
+    exit 1
+fi
+
+exit 0

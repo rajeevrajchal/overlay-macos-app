@@ -1,0 +1,49 @@
+excluded:
+  - .build
+  - DerivedData
+  - overlay-viewer.xcodeproj
+
+# This gate is about catching bugs before they're committed, not enforcing a
+# house style. Force-unwraps are what actually caused a real crash bug here
+# (unsanitized fileKey interpolated into a force-unwrapped URL) — that's the
+# rule worth keeping strict. Pure formatting/cosmetic rules are disabled below
+# so the pre-commit hook stays about correctness, not bikeshedding.
+opt_in_rules:
+  - force_unwrapping
+  - redundant_string_enum_value
+  - empty_count
+  - overridden_super_call
+  - unneeded_override
+
+disabled_rules:
+  - todo
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - trailing_comma
+  - comma
+  - opening_brace
+  - vertical_whitespace
+  - colon
+  - statement_position
+  - trailing_whitespace
+  - non_optional_string_data_conversion
+  # `access_token` / `refresh_token` / `expires_in` intentionally mirror
+  # Figma's JSON field names in Decodable structs.
+  - identifier_name
+  # This codebase's `required init?(coder:) { fatalError() }` boilerplate is
+  # an established, audited-safe pattern for code-only NSView/NSWindowController
+  # subclasses with no Interface Builder usage — not a real risk to flag.
+  - fatal_error_message
+
+# force_cast/force_try are hard errors — the codebase has zero existing
+# instances, so enabling them as blocking is free. force_unwrapping stays a
+# warning: there are 19 existing instances already reviewed as safe (hardcoded
+# literals or values null-checked moments earlier); promoting it to error
+# would require annotating all of them right now rather than at the point
+# something new and actually risky shows up.
+force_cast: error
+force_try: error
+force_unwrapping: warning

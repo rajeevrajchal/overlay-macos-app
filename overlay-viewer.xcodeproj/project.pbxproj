@@ -89,7 +89,6 @@
 				4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */,
 				9CC2EF1F96FBF96ED8E3930F /* FigmaProviderTests.swift */,
 			);
-			name = Figma;
 			path = Figma;
 			sourceTree = "<group>";
 		};
