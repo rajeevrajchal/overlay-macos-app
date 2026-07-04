@@ -32,13 +32,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Toggle Visibility",  action: #selector(toggleVisibility),             keyEquivalent: "h")
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Quit",               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit",               action: #selector(quitApp),                      keyEquivalent: "q")
         for item in menu.items { item.target = self }
         statusItem.menu = menu
     }
 
     @objc private func openImage()        { overlayController.presentOpenPanelOrWelcome() }
     @objc private func toggleVisibility() { overlayController.toggleVisibility() }
+
+    // Both the window's close control and this menu item converge on one exit
+    // path. (The previous #selector(NSApplication.terminate(_:)) was disabled
+    // here because the loop below retargets every item to self, which doesn't
+    // respond to terminate(_:).)
+    @objc private func quitApp() { NSApplication.shared.terminate(nil) }
 
     // MARK: - Main Menu
 
