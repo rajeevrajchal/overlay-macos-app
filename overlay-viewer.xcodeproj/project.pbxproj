@@ -14,6 +14,8 @@
 		B860A0E5CE18CBA7EF46AF50 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4264DAAA62F3BF8FD33C75B6 /* Cocoa.framework */; };
 		CCF96620AA6C4F9B4D3AF7FB /* FigmaURLParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4260BF98B1590CDC25500445 /* FigmaURLParserTests.swift */; };
 		F4DC54D4D0A0E4C0A4C0C785 /* Mocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDE44028E5ADCDDD999A134 /* Mocks.swift */; };
+		A1B2C3D4E5F600000000AA02 /* WelcomeViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000AA01 /* WelcomeViewModelTests.swift */; };
+		A1B2C3D4E5F600000000BB02 /* OverlayControlsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000BB01 /* OverlayControlsViewModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +38,8 @@
 		AEF7390B1213AAD94C331D39 /* FigmaTokenStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaTokenStoreTests.swift; sourceTree = "<group>"; };
 		D30778BDD0C5A76CB4DF9D4D /* FigmaAPIClientTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaAPIClientTests.swift; sourceTree = "<group>"; };
 		ECDE44028E5ADCDDD999A134 /* Mocks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000AA01 /* WelcomeViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WelcomeViewModelTests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000BB01 /* OverlayControlsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OverlayControlsViewModelTests.swift; sourceTree = "<group>"; };
 		FC9127362FEA706100B66A12 /* overlay-viewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "overlay-viewer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -96,6 +100,8 @@
 			isa = PBXGroup;
 			children = (
 				ECDE44028E5ADCDDD999A134 /* Mocks.swift */,
+				A1B2C3D4E5F600000000AA01 /* WelcomeViewModelTests.swift */,
+				A1B2C3D4E5F600000000BB01 /* OverlayControlsViewModelTests.swift */,
 				1F989DFF2FFEBFBEA3A0E426 /* Figma */,
 			);
 			path = "overlay-viewerTests";
@@ -238,6 +244,8 @@
 				CCF96620AA6C4F9B4D3AF7FB /* FigmaURLParserTests.swift in Sources */,
 				2E3303978EF0F586C06E3F91 /* FigmaTokenStoreTests.swift in Sources */,
 				F4DC54D4D0A0E4C0A4C0C785 /* Mocks.swift in Sources */,
+				A1B2C3D4E5F600000000AA02 /* WelcomeViewModelTests.swift in Sources */,
+				A1B2C3D4E5F600000000BB02 /* OverlayControlsViewModelTests.swift in Sources */,
 				4133EF2497A09CB64E3F815E /* FigmaOAuthServiceTests.swift in Sources */,
 				4CD1771092E34F93DF0E6D68 /* FigmaAPIClientTests.swift in Sources */,
 				441987B61239853201D58DE0 /* FigmaProviderTests.swift in Sources */,

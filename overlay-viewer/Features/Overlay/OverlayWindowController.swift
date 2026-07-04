@@ -1,4 +1,6 @@
 import Cocoa
+import Combine
+import SwiftUI
 import UniformTypeIdentifiers
 
 
@@ -56,17 +58,16 @@ final class OverlayWindowController: NSWindowController {
 
     private let environment: AppEnvironment
     private let canvasView = ImageCanvasView()
+    private let controlsViewModel = OverlayControlsViewModel()
     private var toolbarRibbon: ToolbarRibbonView?
     private var welcomeController: WelcomeWindowController?
     private var keyMonitor: Any?
-    private var opacitySlider: NSSlider?
-    private var settingsPopover: NSPopover?
     private var resizer: ResizeHandleView?
+    private var cancellables = Set<AnyCancellable>()
 
     private enum ContentMode { case none, image }
     private var contentMode: ContentMode = .none
 
-    private static let opacityKey          = "overlay.opacity"
     private static let lastImageKey        = "overlay.lastImageURL"
     private static let customWidthKey      = "overlay.customWidth"
     private static let customHeightKey     = "overlay.customHeight"
@@ -121,6 +122,21 @@ final class OverlayWindowController: NSWindowController {
         }
 
         self.toolbarRibbon = ribbon
+
+        // The control bar owns opacity; mirror every change onto the image
+        // pixels (content-only fade, not the whole window) and persist it.
+        // `@Published` replays its current value on subscribe, so this also
+        // sets the initial opacity. No `.receive(on: RunLoop.main)` hop here on
+        // purpose: the view model is already @MainActor, and a RunLoop.main
+        // scheduler only fires in the default mode, which is starved while the
+        // slider is being dragged (mouse tracking runs in event-tracking mode).
+        // Updating synchronously keeps the canvas in lock-step with the thumb.
+        controlsViewModel.$opacity
+            .sink { [weak self] value in
+                self?.canvasView.contentOpacity = CGFloat(value)
+                self?.controlsViewModel.persist()
+            }
+            .store(in: &cancellables)
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
@@ -294,20 +310,9 @@ final class OverlayWindowController: NSWindowController {
         NSApp.activate(ignoringOtherApps: true)
         window?.orderFrontRegardless()
 
-        let savedOpacity = persistedOpacity
         window?.alphaValue = 1.0
-        canvasView.alphaValue = CGFloat(savedOpacity)
-        opacitySlider?.doubleValue = savedOpacity
-    }
-
-    // MARK: - Persistence
-
-    private var persistedOpacity: Double {
-        get {
-            let v = UserDefaults.standard.double(forKey: Self.opacityKey)
-            return v == 0 ? 1.0 : v.clamped(to: 0.1...1.0)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: Self.opacityKey) }
+        // Opacity is mirrored onto the canvas by the controlsViewModel
+        // subscription set up in init; nothing to do here.
     }
 
     // MARK: - Build Toolbar Ribbon
@@ -315,160 +320,28 @@ final class OverlayWindowController: NSWindowController {
     private func buildToolbarRibbon() -> ToolbarRibbonView {
         let ribbon = ToolbarRibbonView()
 
-        let closeBtn = NSButton()
-        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close overlay")
-        closeBtn.title = ""
-        closeBtn.bezelStyle = .circular
-        closeBtn.isBordered = false
-        closeBtn.contentTintColor = NSColor.white.withAlphaComponent(0.85)
-        closeBtn.translatesAutoresizingMaskIntoConstraints = false
-        closeBtn.target = self
-        closeBtn.action = #selector(closeOverlay)
+        controlsViewModel.onClose = { [weak self] in self?.window?.orderOut(nil) }
+        controlsViewModel.onRemove = { [weak self] in self?.removeImage() }
 
-        let changeBtn = NSButton()
-        changeBtn.title = "Change…"
-        changeBtn.bezelStyle = .rounded
-        changeBtn.isBordered = false
-        changeBtn.contentTintColor = .white
-        changeBtn.font = .systemFont(ofSize: 11)
-        changeBtn.translatesAutoresizingMaskIntoConstraints = false
-        changeBtn.target = self
-        changeBtn.action = #selector(changeImageAction)
-
-        let removeBtn = NSButton()
-        removeBtn.title = "Remove"
-        removeBtn.bezelStyle = .rounded
-        removeBtn.isBordered = false
-        removeBtn.contentTintColor = .white
-        removeBtn.font = .systemFont(ofSize: 11)
-        removeBtn.translatesAutoresizingMaskIntoConstraints = false
-        removeBtn.target = self
-        removeBtn.action = #selector(removeImageAction)
-
-        let opacityLabel = NSTextField(labelWithString: "Opacity")
-        opacityLabel.textColor = .white
-        opacityLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        opacityLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let slider = NSSlider(
-            value: 1.0, minValue: 0.1, maxValue: 1.0,
-            target: self, action: #selector(windowOpacityChanged(_:))
-        )
-        slider.isContinuous = true
-        slider.translatesAutoresizingMaskIntoConstraints = false
-        self.opacitySlider = slider
-
-        let settingsBtn = NSButton()
-        settingsBtn.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
-        settingsBtn.title = ""
-        settingsBtn.bezelStyle = .circular
-        settingsBtn.isBordered = false
-        settingsBtn.contentTintColor = NSColor.white.withAlphaComponent(0.85)
-        settingsBtn.translatesAutoresizingMaskIntoConstraints = false
-        settingsBtn.target = self
-        settingsBtn.action = #selector(openSettingsAction(_:))
-
-        // A zero-intrinsic-size view that soaks up all the slack between the
-        // button group and the opacity controls — the "space-between" half
-        // of a flex layout, AppKit-style.
-        let spacer = NSView()
-        spacer.translatesAutoresizingMaskIntoConstraints = false
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        // One stack instead of two independently-pinned ones: with two
-        // separate stacks there was no constraint stopping them from
-        // overlapping once the window got narrow. A single stack lets
-        // AppKit auto-hide the least essential controls (lowered via
-        // setClippingResistancePriority below) before anything can collide.
-        let toolbarStack = NSStackView(views: [
-            closeBtn, changeBtn, removeBtn, settingsBtn, spacer, opacityLabel, slider,
-        ])
-        toolbarStack.orientation = .horizontal
-        toolbarStack.spacing = 8
-        toolbarStack.alignment = .centerY
-        toolbarStack.translatesAutoresizingMaskIntoConstraints = false
-
-        // Hide order when space runs out, least important first: the
-        // opacity label's text, then the slider itself. The four core
-        // buttons stay visible at any width down to window.minSize.
-        toolbarStack.setClippingResistancePriority(.defaultLow, for: .horizontal)
-        toolbarStack.setVisibilityPriority(.init(rawValue: 200), for: opacityLabel)
-        toolbarStack.setVisibilityPriority(.init(rawValue: 400), for: slider)
-
-        ribbon.addSubview(toolbarStack)
+        // The control bar is SwiftUI hosted inside the vibrant ribbon; it stays
+        // transparent so the ribbon's material shows through.
+        let host = NSHostingView(rootView: OverlayControlBar(viewModel: controlsViewModel))
+        host.translatesAutoresizingMaskIntoConstraints = false
+        ribbon.addSubview(host)
 
         NSLayoutConstraint.activate([
-            closeBtn.widthAnchor.constraint(equalToConstant: 22),
-            closeBtn.heightAnchor.constraint(equalToConstant: 22),
-            settingsBtn.widthAnchor.constraint(equalToConstant: 22),
-            settingsBtn.heightAnchor.constraint(equalToConstant: 22),
-            slider.widthAnchor.constraint(equalToConstant: 120),
-
-            toolbarStack.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor, constant: 10),
-            toolbarStack.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor, constant: -10),
-            toolbarStack.centerYAnchor.constraint(equalTo: ribbon.centerYAnchor),
+            host.topAnchor.constraint(equalTo: ribbon.topAnchor),
+            host.bottomAnchor.constraint(equalTo: ribbon.bottomAnchor),
+            host.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor),
         ])
 
         return ribbon
     }
 
-    // MARK: - Size Settings
-
-    private func reapplyImageSize() {
-        guard contentMode == .image, let image = canvasView.image else { return }
-        let maxDimension: CGFloat = 800
-        let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
-        let size = NSSize(
-            width:  image.size.width  * scale,
-            height: image.size.height * scale + ToolbarRibbonView.height
-        )
-        window?.setContentSize(size)
-        window?.center()
-    }
-
-    @objc private func openSettingsAction(_ sender: NSButton) {
-        if settingsPopover == nil {
-            let vc = SizeSettingsViewController()
-            vc.onApply = { [weak self] w, h in
-                guard let self, let window = self.window else { return }
-                let clamped = NSSize(width: max(Self.minWindowSize.width, w), height: max(Self.minWindowSize.height, h))
-                window.setContentSize(clamped)
-                window.center()
-                UserDefaults.standard.set(Double(clamped.width),  forKey: Self.customWidthKey)
-                UserDefaults.standard.set(Double(clamped.height), forKey: Self.customHeightKey)
-                self.settingsPopover?.close()
-            }
-            vc.onReset = { [weak self] in
-                guard let self else { return }
-                UserDefaults.standard.removeObject(forKey: Self.customWidthKey)
-                UserDefaults.standard.removeObject(forKey: Self.customHeightKey)
-                self.reapplyImageSize()
-                self.settingsPopover?.close()
-            }
-            let pop = NSPopover()
-            pop.contentViewController = vc
-            pop.behavior = .transient
-            pop.contentSize = NSSize(width: 240, height: 110)
-            settingsPopover = pop
-        }
-        if let vc = settingsPopover?.contentViewController as? SizeSettingsViewController,
-           let size = window?.contentView?.frame.size {
-            vc.currentSize = size
-        }
-        settingsPopover?.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
-    }
-
     // MARK: - Actions
 
-    @objc private func closeOverlay() {
-        window?.orderOut(nil)
-    }
-
-    @objc private func changeImageAction() {
-        clearAndReopen()
-    }
-
-    @objc private func removeImageAction() {
+    private func removeImage() {
         guard contentMode != .none else { return }
         canvasView.image = nil
         contentMode = .none
@@ -476,24 +349,9 @@ final class OverlayWindowController: NSWindowController {
         window?.orderOut(nil)
         showWelcomeWindow()
     }
-
-    @objc private func windowOpacityChanged(_ sender: NSSlider) {
-        let v = CGFloat(sender.doubleValue)
-        canvasView.alphaValue = v
-        persistedOpacity = sender.doubleValue
-    }
 }
 
 
 // MARK: - NSWindowDelegate
 
 extension OverlayWindowController: NSWindowDelegate {}
-
-
-// MARK: - Helpers
-
-private extension Double {
-    func clamped(to range: ClosedRange<Double>) -> Double {
-        Swift.max(range.lowerBound, Swift.min(range.upperBound, self))
-    }
-}
