@@ -370,4 +370,13 @@ extension OverlayWindowController: NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {
         syncContentSize()
     }
+
+    /// The window's own close control (red traffic light / ⌘W) means "I'm done"
+    /// — fully quit the app, unlike Toggle Visibility (⌘H), which only hides via
+    /// `orderOut`. `windowShouldClose` fires solely on user-initiated closes, so
+    /// it never re-enters while `terminate` is tearing windows down.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        NSApplication.shared.terminate(nil)
+        return false
+    }
 }

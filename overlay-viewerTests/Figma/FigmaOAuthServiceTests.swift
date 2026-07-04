@@ -38,6 +38,16 @@ final class FigmaOAuthConfigurationTests: XCTestCase {
         ])
         XCTAssertNil(config)
     }
+
+    func test_resolved_prefersEnvironmentWhenPresent() {
+        let config = FigmaOAuthConfiguration.resolved(environment: [
+            "FIGMA_CLIENT_ID": "env-id",
+            "FIGMA_CLIENT_SECRET": "env-secret",
+            "FIGMA_REDIRECT_URI": "scheme://callback",
+        ])
+        XCTAssertEqual(config?.clientID, "env-id")
+        XCTAssertEqual(config?.clientSecret, "env-secret")
+    }
 }
 
 final class FigmaOAuthServiceTests: XCTestCase {

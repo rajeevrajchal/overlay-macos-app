@@ -33,6 +33,31 @@ struct FigmaOAuthConfiguration {
         else { return nil }
         return FigmaOAuthConfiguration(clientID: id, clientSecret: secret, redirectURI: redirect)
     }
+
+    /// A distributed .app has no process environment, so `release.sh` bakes the
+    /// same three values into Info.plist at package time. Read them here as the
+    /// release-build fallback. (The client_secret therefore ships inside the
+    /// app bundle — acceptable only for a trusted test build; rotate it after.)
+    static func fromInfoDictionary(_ bundle: Bundle = .main) -> FigmaOAuthConfiguration? {
+        func value(_ key: String) -> String? {
+            guard let v = bundle.object(forInfoDictionaryKey: key) as? String, !v.isEmpty else { return nil }
+            return v
+        }
+        guard let id = value("FigmaClientID"),
+              let secret = value("FigmaClientSecret"),
+              let redirect = value("FigmaRedirectURI")
+        else { return nil }
+        return FigmaOAuthConfiguration(clientID: id, clientSecret: secret, redirectURI: redirect)
+    }
+
+    /// Production resolution order: process environment (dev, via the Xcode
+    /// scheme) first, then Info.plist (release, baked in by release.sh).
+    static func resolved(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundle: Bundle = .main
+    ) -> FigmaOAuthConfiguration? {
+        fromEnvironment(environment) ?? fromInfoDictionary(bundle)
+    }
 }
 
 struct FigmaTokenResponse: Decodable {
@@ -94,7 +119,7 @@ final class FigmaOAuthService: NSObject {
     /// in flight.
     private var isAuthenticating = false
 
-    init(configuration: FigmaOAuthConfiguration? = .fromEnvironment(),
+    init(configuration: FigmaOAuthConfiguration? = .resolved(),
          httpClient: FigmaHTTPClient = URLSession.shared,
          tokenStore: FigmaTokenStoring = FigmaKeychainTokenStore()) {
         self.configuration = configuration

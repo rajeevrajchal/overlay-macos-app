@@ -51,7 +51,8 @@ You only have to do this on the first launch of each new version.
    **"Reset to Fit"** should refit the window to the image.
 
 ### Known constraints
-- Distributed outside the App Store; installed from a notarized DMG.
+- Distributed outside the App Store; the app is ad-hoc signed and **not notarized**, so the
+  first launch needs the one-time Gatekeeper bypass above.
 - Figma import requires a Figma account and network access.
 
 Feedback welcome — please include your macOS version and steps to reproduce any issue.

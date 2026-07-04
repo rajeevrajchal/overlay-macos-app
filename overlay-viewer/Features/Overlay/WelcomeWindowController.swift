@@ -159,4 +159,12 @@ extension WelcomeWindowController: NSWindowDelegate {
         NSApp.activate()
         viewModel.refreshConnectionState()
     }
+
+    /// Closing the start panel means "I'm done" — quit the whole app, the same
+    /// as closing the overlay. (Hiding for later is Toggle Visibility / ⌘H,
+    /// which uses `orderOut` and never reaches this method.)
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        NSApplication.shared.terminate(nil)
+        return false
+    }
 }
