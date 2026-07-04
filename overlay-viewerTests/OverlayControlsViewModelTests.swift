@@ -73,4 +73,21 @@ final class OverlayControlsViewModelTests: XCTestCase {
         vm.requestRemove()
         XCTAssertTrue(removed)
     }
+
+    func test_applyCustomSize_floorsToMinimum() {
+        let vm = OverlayControlsViewModel(defaults: defaults)
+        var applied: CGSize?
+        vm.onApplyCustomSize = { applied = CGSize(width: $0, height: $1) }
+        vm.applyCustomSize(width: 10, height: 10_000)
+        XCTAssertEqual(applied?.width, OverlayControlsViewModel.minCustomSize)
+        XCTAssertEqual(applied?.height, 10_000)
+    }
+
+    func test_resetSize_invokesClosure() {
+        let vm = OverlayControlsViewModel(defaults: defaults)
+        var didReset = false
+        vm.onResetSize = { didReset = true }
+        vm.resetSize()
+        XCTAssertTrue(didReset)
+    }
 }

@@ -30,31 +30,6 @@ final class OverlayContainerView: NSView {
 }
 
 
-// MARK: - ToolbarRibbonView
-
-final class ToolbarRibbonView: NSVisualEffectView {
-
-    static let height: CGFloat = 44
-
-    override var isOpaque: Bool { false }
-
-    init() {
-        super.init(frame: .zero)
-        material = .menu
-        blendingMode = .behindWindow
-        state = .active
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func layout() {
-        super.layout()
-        layer?.cornerRadius = 8
-        layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-    }
-}
-
-
 // MARK: - OverlayWindowController
 
 final class OverlayWindowController: NSWindowController {
@@ -63,7 +38,6 @@ final class OverlayWindowController: NSWindowController {
     private let gridView = CanvasGridView()
     private let canvasView = ImageCanvasView()
     private let controlsViewModel = OverlayControlsViewModel()
-    private var toolbarRibbon: ToolbarRibbonView?
     private var welcomeController: WelcomeWindowController?
     private var keyMonitor: Any?
     private var resizer: ResizeHandleView?
@@ -75,7 +49,10 @@ final class OverlayWindowController: NSWindowController {
     private static let lastImageKey        = "overlay.lastImageURL"
     private static let customWidthKey      = "overlay.customWidth"
     private static let customHeightKey     = "overlay.customHeight"
-    private static let minWindowSize       = NSSize(width: 400, height: ToolbarRibbonView.height + 60)
+    // Deliberately small so the overlay can be shrunk to a corner thumbnail —
+    // the toolbar degrades gracefully at narrow widths, and the size gear allows
+    // exact dimensions.
+    private static let minWindowSize       = NSSize(width: 220, height: OverlayToolbar.height + 30)
 
     // MARK: - Init
 
@@ -89,24 +66,34 @@ final class OverlayWindowController: NSWindowController {
         )
         container.autoresizingMask = [.width, .height]
 
-        let ribbon = buildToolbarRibbon()
-        ribbon.translatesAutoresizingMaskIntoConstraints = false
+        // The whole toolbar is one self-contained SwiftUI component: it carries
+        // its own vibrant material, height, and divider, so it just needs
+        // hosting and pinning — no AppKit wrapper view.
+        controlsViewModel.onRemove = { [weak self] in self?.removeImage() }
+        controlsViewModel.onApplyCustomSize = { [weak self] width, height in
+            self?.applyCustomSize(width: width, height: height)
+        }
+        controlsViewModel.onResetSize = { [weak self] in
+            self?.resetToImageFit()
+        }
+        let toolbar = NSHostingView(rootView: OverlayToolbar(viewModel: controlsViewModel))
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
         canvasView.translatesAutoresizingMaskIntoConstraints = false
         gridView.translatesAutoresizingMaskIntoConstraints = false
 
         // Bottom-to-top z-order: fixed-alpha grid, then the image (the only
-        // layer that obeys the opacity slider), then the always-opaque ribbon.
+        // layer that obeys the opacity slider), then the always-opaque toolbar.
         container.addSubview(gridView)
         container.addSubview(canvasView)
-        container.addSubview(ribbon)
+        container.addSubview(toolbar)
 
         NSLayoutConstraint.activate([
-            ribbon.topAnchor.constraint(equalTo: container.topAnchor),
-            ribbon.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            ribbon.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            ribbon.heightAnchor.constraint(equalToConstant: ToolbarRibbonView.height),
+            toolbar.topAnchor.constraint(equalTo: container.topAnchor),
+            toolbar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            toolbar.heightAnchor.constraint(equalToConstant: OverlayToolbar.height),
 
-            canvasView.topAnchor.constraint(equalTo: ribbon.bottomAnchor),
+            canvasView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             canvasView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             canvasView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -123,7 +110,7 @@ final class OverlayWindowController: NSWindowController {
         // the gear icon's numeric popover.
         let resizer = ResizeHandleView(minSize: Self.minWindowSize, frame: container.bounds)
         resizer.autoresizingMask = [.width, .height]
-        resizer.chromeHeight = ToolbarRibbonView.height
+        resizer.chromeHeight = OverlayToolbar.height
         container.addSubview(resizer)
         self.resizer = resizer
 
@@ -134,8 +121,6 @@ final class OverlayWindowController: NSWindowController {
         if !NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
             window.center()
         }
-
-        self.toolbarRibbon = ribbon
 
         // The control bar owns opacity; mirror every change onto the image
         // pixels (content-only fade, not the whole window) and persist it.
@@ -312,13 +297,7 @@ final class OverlayWindowController: NSWindowController {
         if savedW > 0 && savedH > 0 {
             window?.setContentSize(NSSize(width: savedW, height: savedH))
         } else {
-            let maxDimension: CGFloat = 800
-            let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
-            let windowSize = NSSize(
-                width: image.size.width * scale,
-                height: image.size.height * scale + ToolbarRibbonView.height
-            )
-            window?.setContentSize(windowSize)
+            window?.setContentSize(imageFitContentSize(image))
         }
         window?.center()
         NSApp.activate(ignoringOtherApps: true)
@@ -327,29 +306,49 @@ final class OverlayWindowController: NSWindowController {
         window?.alphaValue = 1.0
         // Opacity is mirrored onto the canvas by the controlsViewModel
         // subscription set up in init; nothing to do here.
+        syncContentSize()
     }
 
-    // MARK: - Build Toolbar Ribbon
+    /// The content size that fits (contains) the image at up to 1× scale, plus
+    /// the toolbar strip.
+    private func imageFitContentSize(_ image: NSImage) -> NSSize {
+        let maxDimension: CGFloat = 800
+        let scale = min(maxDimension / image.size.width, maxDimension / image.size.height, 1.0)
+        return NSSize(
+            width: image.size.width * scale,
+            height: image.size.height * scale + OverlayToolbar.height
+        )
+    }
 
-    private func buildToolbarRibbon() -> ToolbarRibbonView {
-        let ribbon = ToolbarRibbonView()
+    // MARK: - Custom size (gear popover)
 
-        controlsViewModel.onRemove = { [weak self] in self?.removeImage() }
+    private func applyCustomSize(width: CGFloat, height: CGFloat) {
+        guard let window else { return }
+        let size = NSSize(
+            width: max(Self.minWindowSize.width, width),
+            height: max(Self.minWindowSize.height, height)
+        )
+        window.setContentSize(size)
+        UserDefaults.standard.set(Double(size.width), forKey: Self.customWidthKey)
+        UserDefaults.standard.set(Double(size.height), forKey: Self.customHeightKey)
+        syncContentSize()
+    }
 
-        // The control bar is SwiftUI hosted inside the vibrant ribbon; it stays
-        // transparent so the ribbon's material shows through.
-        let host = NSHostingView(rootView: OverlayControlBar(viewModel: controlsViewModel))
-        host.translatesAutoresizingMaskIntoConstraints = false
-        ribbon.addSubview(host)
+    private func resetToImageFit() {
+        UserDefaults.standard.removeObject(forKey: Self.customWidthKey)
+        UserDefaults.standard.removeObject(forKey: Self.customHeightKey)
+        guard let window, contentMode == .image, let image = canvasView.image else { return }
+        window.setContentSize(imageFitContentSize(image))
+        window.center()
+        syncContentSize()
+    }
 
-        NSLayoutConstraint.activate([
-            host.topAnchor.constraint(equalTo: ribbon.topAnchor),
-            host.bottomAnchor.constraint(equalTo: ribbon.bottomAnchor),
-            host.leadingAnchor.constraint(equalTo: ribbon.leadingAnchor),
-            host.trailingAnchor.constraint(equalTo: ribbon.trailingAnchor),
-        ])
-
-        return ribbon
+    /// Keep the view model's `contentSize` in step with the live window so the
+    /// size popover pre-fills current dimensions.
+    private func syncContentSize() {
+        if let size = window?.contentView?.frame.size {
+            controlsViewModel.contentSize = size
+        }
     }
 
     // MARK: - Actions
@@ -367,4 +366,8 @@ final class OverlayWindowController: NSWindowController {
 
 // MARK: - NSWindowDelegate
 
-extension OverlayWindowController: NSWindowDelegate {}
+extension OverlayWindowController: NSWindowDelegate {
+    func windowDidResize(_ notification: Notification) {
+        syncContentSize()
+    }
+}
