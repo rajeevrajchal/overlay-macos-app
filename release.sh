@@ -70,6 +70,25 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO
 [[ -d "$APP_PATH" ]] || die "Expected app not found at $APP_PATH"
 
+# --- Bake Figma credentials into Info.plist (before signing) ---
+# A distributed .app has no process environment, so the app reads these from
+# Info.plist at runtime (FigmaOAuthConfiguration.fromInfoDictionary). Values come
+# from .env, sourced above. NOTE: this embeds the client secret in the shipped
+# app — only do this for a trusted test build, and rotate the secret afterward.
+INFO_PLIST="$APP_PATH/Contents/Info.plist"
+if [[ -n "${FIGMA_CLIENT_ID:-}" && -n "${FIGMA_CLIENT_SECRET:-}" && -n "${FIGMA_REDIRECT_URI:-}" ]]; then
+  log "Baking Figma credentials into Info.plist…"
+  set_info() {  # key, value — add or overwrite
+    /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$INFO_PLIST" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Set :$1 $2" "$INFO_PLIST"
+  }
+  set_info FigmaClientID     "$FIGMA_CLIENT_ID"
+  set_info FigmaClientSecret "$FIGMA_CLIENT_SECRET"
+  set_info FigmaRedirectURI  "$FIGMA_REDIRECT_URI"
+else
+  echo "  (FIGMA_* not set in .env — Figma will be disabled in this build)"
+fi
+
 # --- Ad-hoc sign ---
 # Minimal entitlements: sandbox + network (Figma) + user-selected read files.
 # The keychain-access-group entitlement is dropped on purpose — it requires a
