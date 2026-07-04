@@ -27,7 +27,6 @@ final class WelcomeViewModel: ObservableObject {
 
     // MARK: Intents routed out to the host controller
 
-    var onCloseRequested: (() -> Void)?
     var onBrowseRequested: (() -> Void)?
     var onFileDropped: ((URL) -> Void)?
     var onProviderImageLoaded: ((NSImage) -> Void)?
@@ -84,10 +83,6 @@ final class WelcomeViewModel: ObservableObject {
     func requestBrowse() {
         errorMessage = nil
         onBrowseRequested?()
-    }
-
-    func requestClose() {
-        onCloseRequested?()
     }
 
     /// Accepts a file URL dropped onto the window. Non-image URLs are ignored

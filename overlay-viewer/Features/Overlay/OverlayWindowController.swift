@@ -20,8 +20,11 @@ final class OverlayContainerView: NSView {
     override func updateLayer() {
         layer?.cornerRadius = 8
         layer?.masksToBounds = true
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
-        layer?.borderWidth = 0.5
+        // A medium-gray, mostly-opaque hairline so the app's edge reads clearly
+        // against both light and dark backdrops (a faint white line vanishes on
+        // light desktops).
+        layer?.borderColor = NSColor(white: 0.6, alpha: 0.85).cgColor
+        layer?.borderWidth = 1.0
     }
     
 }
@@ -31,7 +34,7 @@ final class OverlayContainerView: NSView {
 
 final class ToolbarRibbonView: NSVisualEffectView {
 
-    static let height: CGFloat = 36
+    static let height: CGFloat = 44
 
     override var isOpaque: Bool { false }
 
@@ -57,6 +60,7 @@ final class ToolbarRibbonView: NSVisualEffectView {
 final class OverlayWindowController: NSWindowController {
 
     private let environment: AppEnvironment
+    private let gridView = CanvasGridView()
     private let canvasView = ImageCanvasView()
     private let controlsViewModel = OverlayControlsViewModel()
     private var toolbarRibbon: ToolbarRibbonView?
@@ -88,7 +92,11 @@ final class OverlayWindowController: NSWindowController {
         let ribbon = buildToolbarRibbon()
         ribbon.translatesAutoresizingMaskIntoConstraints = false
         canvasView.translatesAutoresizingMaskIntoConstraints = false
+        gridView.translatesAutoresizingMaskIntoConstraints = false
 
+        // Bottom-to-top z-order: fixed-alpha grid, then the image (the only
+        // layer that obeys the opacity slider), then the always-opaque ribbon.
+        container.addSubview(gridView)
         container.addSubview(canvasView)
         container.addSubview(ribbon)
 
@@ -102,6 +110,12 @@ final class OverlayWindowController: NSWindowController {
             canvasView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             canvasView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvasView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            // Grid fills the same content area as the image, sitting behind it.
+            gridView.topAnchor.constraint(equalTo: canvasView.topAnchor),
+            gridView.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
+            gridView.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor),
+            gridView.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
 
         // Resize handle overlay (must be added LAST so it's on top) — gives the
@@ -320,7 +334,6 @@ final class OverlayWindowController: NSWindowController {
     private func buildToolbarRibbon() -> ToolbarRibbonView {
         let ribbon = ToolbarRibbonView()
 
-        controlsViewModel.onClose = { [weak self] in self?.window?.orderOut(nil) }
         controlsViewModel.onRemove = { [weak self] in self?.removeImage() }
 
         // The control bar is SwiftUI hosted inside the vibrant ribbon; it stays

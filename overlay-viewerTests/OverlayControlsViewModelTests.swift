@@ -66,15 +66,11 @@ final class OverlayControlsViewModelTests: XCTestCase {
         XCTAssertEqual(defaults.double(forKey: "overlay.opacity"), 0.33, accuracy: 0.0001)
     }
 
-    func test_intents_invokeClosures() {
+    func test_removeIntent_invokesClosure() {
         let vm = OverlayControlsViewModel(defaults: defaults)
-        var closed = false
         var removed = false
-        vm.onClose = { closed = true }
         vm.onRemove = { removed = true }
-        vm.requestClose()
         vm.requestRemove()
-        XCTAssertTrue(closed)
         XCTAssertTrue(removed)
     }
 }

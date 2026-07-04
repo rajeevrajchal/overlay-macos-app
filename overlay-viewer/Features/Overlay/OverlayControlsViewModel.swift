@@ -13,7 +13,6 @@ final class OverlayControlsViewModel: ObservableObject {
     /// as "the app broke") while still going faint enough for onion-skin tracing.
     @Published var opacity: Double
 
-    var onClose: (() -> Void)?
     var onRemove: (() -> Void)?
 
     static let range: ClosedRange<Double> = 0.1...1.0
@@ -43,7 +42,6 @@ final class OverlayControlsViewModel: ObservableObject {
         defaults.set(opacity, forKey: Self.opacityKey)
     }
 
-    func requestClose() { onClose?() }
     func requestRemove() { onRemove?() }
 }
 

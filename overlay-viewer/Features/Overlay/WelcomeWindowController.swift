@@ -13,10 +13,16 @@ final class WelcomeWindow: NSWindow {
     convenience init() {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 500),
-            styleMask: [.borderless, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        // A real title bar — so the system draws real traffic lights with their
+        // built-in hover, cursor, ⌘W, and VoiceOver support — but transparent
+        // and with content extending edge-to-edge underneath, preserving the
+        // borderless overlay look.
+        titlebarAppearsTransparent = true
+        titleVisibility = .hidden
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
@@ -25,6 +31,11 @@ final class WelcomeWindow: NSWindow {
         isReleasedWhenClosed = false
         minSize = NSSize(width: 260, height: 360)
         collectionBehavior = [.canJoinAllSpaces, .transient]
+
+        // The red close button is the "X" replacement, for free. Minimize/zoom
+        // don't fit an always-on-top reference panel, so hide them deliberately.
+        standardWindowButton(.miniaturizeButton)?.isHidden = true
+        standardWindowButton(.zoomButton)?.isHidden = true
     }
 }
 
@@ -73,9 +84,6 @@ final class WelcomeWindowController: NSWindowController {
     // MARK: - Intent wiring
 
     private func wireViewModelIntents() {
-        viewModel.onCloseRequested = { [weak self] in
-            self?.window?.orderOut(nil)
-        }
         viewModel.onBrowseRequested = { [weak self] in
             self?.presentOpenPanel()
         }

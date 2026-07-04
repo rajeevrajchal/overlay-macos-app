@@ -19,26 +19,21 @@ struct WelcomeView: View {
             content
         }
         .background(Color.clear)
+        // Titled + full-size-content window: don't let SwiftUI add its own
+        // titlebar safe-area inset on top of our explicit 36pt `titleBar`
+        // spacer (which already reserves room for the traffic lights).
+        .ignoresSafeArea()
     }
 
     // MARK: Title bar
 
+    /// Reserves the top strip for the window's native traffic lights (drawn by
+    /// the system over the full-size content view). The real red close button
+    /// replaces the old hand-drawn "X".
     private var titleBar: some View {
-        HStack {
-            Button(action: viewModel.requestClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Close")
-            .accessibilityLabel("Close")
-            Spacer()
-        }
-        .padding(.horizontal, DesignTokens.Space.sm)
-        .frame(height: 36)
+        Color.clear
+            .frame(height: 36)
+            .accessibilityHidden(true)
     }
 
     // MARK: Content
