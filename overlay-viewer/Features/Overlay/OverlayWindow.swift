@@ -18,7 +18,7 @@ final class OverlayWindow: NSWindow {
     convenience init() {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
-            styleMask: [.borderless, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -46,12 +46,18 @@ final class OverlayWindow: NSWindow {
         self.backgroundColor = .clear
         self.hasShadow = true
 
-        // --- Free dragging, no titlebar ---
+        // --- Free dragging, transparent titlebar ---
+        // A real (titled) window so the system draws real traffic lights with
+        // their built-in hover/cursor/⌘W/VoiceOver support, but transparent and
+        // with content edge-to-edge underneath — keeping the borderless look.
         self.isMovableByWindowBackground = true
-
-        // --- Misc ---
         self.titlebarAppearsTransparent = true
         self.titleVisibility = .hidden
         self.isReleasedWhenClosed = false
+
+        // The red close button replaces the old custom "X". Minimize/zoom make
+        // no sense for an always-on-top overlay, so hide them deliberately.
+        self.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        self.standardWindowButton(.zoomButton)?.isHidden = true
     }
 }
