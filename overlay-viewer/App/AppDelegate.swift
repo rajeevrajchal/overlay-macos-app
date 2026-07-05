@@ -12,7 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         NSLog("2. Status item created: \(statusItem != nil)")
 
-        // Defer so the run loop is ready before we try to show/activate windows
+        // Defer so the run loop is ready before we try to show/activate windows.
+        // `restoreLastImage()` returns false whenever it can't actually present a
+        // window (no saved image, or the saved one failed to load), so the
+        // welcome screen is the guaranteed fallback — the app always shows
+        // *something* on launch.
         DispatchQueue.main.async {
             if !self.overlayController.restoreLastImage() {
                 self.overlayController.showWelcomeWindow()

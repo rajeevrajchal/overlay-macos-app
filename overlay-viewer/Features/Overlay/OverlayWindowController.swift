@@ -137,6 +137,16 @@ final class OverlayWindowController: NSWindowController {
             }
             .store(in: &cancellables)
 
+        // Aspect-lock toggle: mirror onto the canvas draw mode (fit vs stretch)
+        // and the window's interactive resize constraint (ratio-locked vs
+        // free-form), then persist. Kept in one place so the two never drift.
+        controlsViewModel.$aspectLocked
+            .sink { [weak self] _ in
+                self?.applyAspectLock()
+                self?.controlsViewModel.persist()
+            }
+            .store(in: &cancellables)
+
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             switch (event.keyCode, event.modifierFlags.contains(.command)) {
@@ -229,6 +239,11 @@ final class OverlayWindowController: NSWindowController {
         }
     }
 
+    /// Attempts to restore the last-shown image. Returns `true` ONLY when it
+    /// actually put a window on screen — the launch sequence relies on a `false`
+    /// return to fall back to the welcome screen, so this must never claim
+    /// success it didn't deliver. (The Figma branch returns `true` eagerly but
+    /// owns its own welcome fallback inside the async task.)
     @discardableResult
     func restoreLastImage() -> Bool {
         if environment.figmaProvider.hasPersistedImage {
@@ -250,14 +265,24 @@ final class OverlayWindowController: NSWindowController {
         guard let urlString = UserDefaults.standard.string(forKey: Self.lastImageKey),
               let url = URL(string: urlString),
               FileManager.default.fileExists(atPath: url.path) else { return false }
-        load(imageURL: url, resetCustomSize: false)
+        // `fileExists` passing doesn't guarantee the file is *readable* — a
+        // sandboxed app loses access to arbitrary paths across launches, so the
+        // decode can still fail. If it does, drop the stale key and report
+        // failure so the caller shows the welcome screen instead of nothing.
+        guard load(imageURL: url, resetCustomSize: false) else {
+            UserDefaults.standard.removeObject(forKey: Self.lastImageKey)
+            return false
+        }
         return true
     }
 
     // MARK: - Image loading
 
-    private func load(imageURL: URL, resetCustomSize: Bool = true) {
-        guard let image = NSImage(contentsOf: imageURL) else { return }
+    /// Returns `true` when the image decoded and a window was presented; `false`
+    /// if the file couldn't be read/decoded, so callers can fall back.
+    @discardableResult
+    private func load(imageURL: URL, resetCustomSize: Bool = true) -> Bool {
+        guard let image = NSImage(contentsOf: imageURL) else { return false }
         welcomeController?.window?.orderOut(nil)
         canvasView.isHidden = false
         canvasView.image = image
@@ -265,6 +290,7 @@ final class OverlayWindowController: NSWindowController {
         environment.figmaProvider.clearLastImage()
         presentLoadedImage(image, resetCustomSize: resetCustomSize)
         UserDefaults.standard.set(imageURL.absoluteString, forKey: Self.lastImageKey)
+        return true
     }
 
     /// Presents an image fetched through a DesignSourceProviding (Figma
@@ -285,7 +311,7 @@ final class OverlayWindowController: NSWindowController {
     /// when restoring the same image on relaunch, where keeping the saved size
     /// is the intended "persistent state" behavior.
     private func presentLoadedImage(_ image: NSImage, resetCustomSize: Bool) {
-        resizer?.aspectRatio = image.size.width / image.size.height
+        applyAspectLock()
 
         if resetCustomSize {
             UserDefaults.standard.removeObject(forKey: Self.customWidthKey)
@@ -307,6 +333,22 @@ final class OverlayWindowController: NSWindowController {
         // Opacity is mirrored onto the canvas by the controlsViewModel
         // subscription set up in init; nothing to do here.
         syncContentSize()
+    }
+
+    /// Push the current aspect-lock choice down to the two views that enforce
+    /// it: the canvas (fit vs stretch draw) and the resize handle (ratio-locked
+    /// vs free-form window resize). In free-form mode the resizer ratio is
+    /// cleared so any edge can be dragged independently; in locked mode it's the
+    /// live image's ratio so the window never letterboxes. No-op'd cleanly when
+    /// no image is loaded.
+    private func applyAspectLock() {
+        let locked = controlsViewModel.aspectLocked
+        canvasView.aspectLocked = locked
+        if locked, let image = canvasView.image, image.size.height > 0 {
+            resizer?.aspectRatio = image.size.width / image.size.height
+        } else {
+            resizer?.aspectRatio = nil
+        }
     }
 
     /// The content size that fits (contains) the image at up to 1× scale, plus
@@ -369,6 +411,43 @@ final class OverlayWindowController: NSWindowController {
 extension OverlayWindowController: NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {
         syncContentSize()
+    }
+
+    /// Constrain interactive resize to the image's aspect ratio while aspect-lock
+    /// is on, so dragging any window edge scales the image proportionally — the
+    /// automatic "Shift-drag" behavior — instead of letting the window drift to a
+    /// mismatched shape that would gutter the fitted image. This covers the
+    /// system's built-in edge resize (`.resizable`), which bypasses the custom
+    /// `ResizeHandleView`; the handle enforces the same ratio for its own drags.
+    /// In free-form mode we return the proposed size untouched (deliberate
+    /// stretch). Programmatic `setContentSize` (the numeric size popover) doesn't
+    /// route through here, so that manual override still works.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        guard controlsViewModel.aspectLocked,
+              contentMode == .image,
+              let image = canvasView.image,
+              image.size.width > 0, image.size.height > 0 else { return frameSize }
+
+        let ratio = image.size.width / image.size.height
+        let chrome = OverlayToolbar.height            // toolbar strip isn't part of the image area
+        let current = sender.frame.size
+
+        // Drive from whichever dimension the user moved more; derive the other so
+        // width : (height - toolbar) stays equal to the image's ratio.
+        var width = frameSize.width
+        var height = frameSize.height
+        if abs(frameSize.width - current.width) >= abs(frameSize.height - current.height) {
+            height = width / ratio + chrome
+        } else {
+            width = (height - chrome) * ratio
+        }
+
+        // Never propose below the window minimum on either axis.
+        let minS = Self.minWindowSize
+        if width < minS.width  { width = minS.width;  height = width / ratio + chrome }
+        if height < minS.height { height = minS.height; width = (height - chrome) * ratio }
+
+        return NSSize(width: width, height: height)
     }
 
     /// The window's own close control (red traffic light / ⌘W) means "I'm done"
