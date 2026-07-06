@@ -17,6 +17,14 @@ final class OverlayControlsViewModel: ObservableObject {
     /// sync so the size-settings popover can pre-fill the live dimensions.
     @Published var contentSize: CGSize = CGSize(width: 600, height: 400)
 
+    /// Whether interactive resize keeps the reference image's original aspect
+    /// ratio (`true` → the image scales to fit, proportions preserved) or lets it
+    /// stretch free-form to whatever the window bounds are (`false` → fill,
+    /// proportions ignored). Free-form is what lets a user match an irregular
+    /// crop; locked is what matches an exact Figma export scale. Persisted so the
+    /// choice survives relaunch.
+    @Published var aspectLocked: Bool
+
     var onRemove: (() -> Void)?
     /// Apply a user-typed custom size (already floored to `minCustomSize`).
     var onApplyCustomSize: ((CGFloat, CGFloat) -> Void)?
@@ -31,12 +39,16 @@ final class OverlayControlsViewModel: ObservableObject {
     static let minCustomSize: CGFloat = 120
 
     private static let opacityKey = "overlay.opacity"
+    private static let aspectLockedKey = "overlay.aspectLocked"
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let stored = defaults.double(forKey: Self.opacityKey)
         self.opacity = stored == 0 ? 1.0 : stored.clamped(to: Self.range)
+        // Defaults to locked (aspect-preserving) when no preference is stored —
+        // `object(forKey:)` distinguishes "never set" from a stored `false`.
+        self.aspectLocked = defaults.object(forKey: Self.aspectLockedKey) as? Bool ?? true
     }
 
     /// Whole-percent readout for the live label and VoiceOver value.
@@ -49,9 +61,10 @@ final class OverlayControlsViewModel: ObservableObject {
         opacity = (opacity + delta).clamped(to: Self.range)
     }
 
-    /// Persist the current value. Called by the host after changes settle.
+    /// Persist the current values. Called by the host after changes settle.
     func persist() {
         defaults.set(opacity, forKey: Self.opacityKey)
+        defaults.set(aspectLocked, forKey: Self.aspectLockedKey)
     }
 
     func requestRemove() { onRemove?() }

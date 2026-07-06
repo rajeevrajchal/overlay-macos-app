@@ -32,6 +32,10 @@ final class CanvasGridView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        // Redraw the dots in step with each live-resize frame instead of letting
+        // Core Animation stretch stale layer contents (which shimmers/flickers
+        // the grid as the window is dragged).
+        layerContentsRedrawPolicy = .duringViewResize
     }
 
     required init?(coder: NSCoder) { fatalError() }

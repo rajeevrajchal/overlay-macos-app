@@ -36,6 +36,7 @@ struct OverlayToolbar: View {
         HStack(spacing: DesignTokens.Space.sm) {
             clearButton
             sizeButton
+            aspectLockButton
             Spacer(minLength: DesignTokens.Space.sm)
             opacityModule
         }
@@ -114,6 +115,30 @@ struct OverlayToolbar: View {
         .popover(isPresented: $showingSizeSettings, arrowEdge: .bottom) {
             SizeSettingsForm(viewModel: viewModel, isPresented: $showingSizeSettings)
         }
+    }
+
+    // MARK: Aspect lock — toggle between proportional-fit and free-form stretch
+
+    // Icon-only toggle sitting beside the size gear. Locked (default) keeps the
+    // image's proportions as the window resizes; unlocked lets it stretch to
+    // fill whatever bounds the user drags — the free-form "match an irregular
+    // reference" mode. Tinted when active so its state reads at a glance.
+    private var aspectLockButton: some View {
+        Button {
+            viewModel.aspectLocked.toggle()
+        } label: {
+            Image(systemName: viewModel.aspectLocked ? "lock.fill" : "lock.open")
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(viewModel.aspectLocked ? DesignTokens.accent : Color.secondary)
+        .help(viewModel.aspectLocked
+              ? "Aspect ratio locked — image keeps its proportions as you resize"
+              : "Free-form resize — image stretches to fill the window")
+        .accessibilityLabel("Lock aspect ratio")
+        .accessibilityValue(viewModel.aspectLocked ? "Locked" : "Free-form")
     }
 
     // MARK: Opacity — treated as an instrument, not inline text
