@@ -12,6 +12,8 @@ final class ResizeHandleView: NSView {
     private var resizeEdge: Edge = .none
     private var dragStartScreen: NSPoint = .zero
     private var dragStartFrame: NSRect = .zero
+    /// The window's `hasShadow` before a drag, restored on mouse-up.
+    private var savedHasShadow = true
 
     /// When set (width / height of the content being displayed), interactive
     /// resize is constrained to this ratio so the content always fills the
@@ -78,6 +80,13 @@ final class ResizeHandleView: NSView {
         guard resizeEdge != .none, let win = window else { return }
         dragStartScreen = win.convertPoint(toScreen: event.locationInWindow)
         dragStartFrame = win.frame
+
+        // The window is transparent + shadowed, so AppKit recomputes the drop
+        // shadow from the content's alpha shape on every resize step — a per-tick
+        // cost that flickers the edges. Drop it for the duration of the drag and
+        // restore it (recomputed once) on mouse-up.
+        savedHasShadow = win.hasShadow
+        win.hasShadow = false
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -92,12 +101,30 @@ final class ResizeHandleView: NSView {
         }
         let origin = anchoredOrigin(forWidth: width, height: height)
 
-        win.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true)
+        // Apply the frame change inside a CATransaction with implicit actions
+        // off so the window's layer-backed subviews (image layer, grid) resize in
+        // lock-step with the window frame in a single commit — rather than the
+        // frame jumping this tick and the layer content easing to catch up next
+        // tick, which reads as flicker when shrinking.
+        //
+        // `display: false`: every piece of content is now a GPU-composited layer
+        // (image layer, the grid's pattern background, the toolbar's material),
+        // so there's nothing to redraw on the CPU each tick. Letting the frame +
+        // layers settle in the CA commit — instead of forcing a synchronous
+        // per-event redraw pass — is what makes the shrink fully smooth.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        win.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: false)
+        CATransaction.commit()
     }
 
     override func mouseUp(with event: NSEvent) {
         resizeEdge = .none
         NSCursor.arrow.set()
+        if let win = window {
+            win.hasShadow = savedHasShadow
+            win.invalidateShadow()   // recompute the shadow once, for the final shape
+        }
     }
 
     // MARK: - Resize math
