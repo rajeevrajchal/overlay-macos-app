@@ -1,0 +1,78 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["typescript", "unicorn", "import"],
+	"env": {
+		"browser": true,
+		"builtin": true
+	},
+	"rules": {
+		"no-undef": "off",
+
+		"typescript/no-unused-vars": [
+			"error",
+			{
+				"argsIgnorePattern": "^_",
+				"varsIgnorePattern": "^_"
+			}
+		],
+		"typescript/no-explicit-any": "error",
+		"typescript/naming-convention": [
+			"error",
+			{
+				"selector": "default",
+				"format": ["camelCase"],
+				"leadingUnderscore": "allow"
+			},
+			{
+				"selector": "variable",
+				"format": ["camelCase", "UPPER_CASE", "PascalCase"]
+			},
+			{
+				"selector": "typeLike",
+				"format": ["PascalCase"]
+			},
+			{
+				"selector": "import",
+				"format": ["camelCase", "PascalCase"]
+			}
+		],
+
+		"unicorn/filename-case": [
+			"error",
+			{
+				"case": "kebabCase",
+				"ignore": ["^\\+"]
+			}
+		]
+	},
+	"overrides": [
+		{
+			"files": ["**/*.ts", "**/*.tsx", "**/*.svelte"],
+			"plugins": ["typescript"],
+			"rules": {
+				"typescript/no-explicit-any": "error",
+				"typescript/naming-convention": [
+					"error",
+					{ "selector": "default", "format": ["camelCase"], "leadingUnderscore": "allow" },
+					{ "selector": "variable", "format": ["camelCase", "UPPER_CASE", "PascalCase"] },
+					{ "selector": "typeLike", "format": ["PascalCase"] },
+					{ "selector": "import", "format": ["camelCase", "PascalCase"] }
+				]
+			}
+		},
+		{
+			"files": ["src/**/*.{ts,tsx,svelte,js,jsx}"],
+			"plugins": ["unicorn"],
+			"rules": {
+				"unicorn/filename-case": [
+					"error",
+					{
+						"case": "kebabCase",
+						"ignore": ["^\\+"]
+					}
+				]
+			}
+		}
+	],
+	"ignorePatterns": []
+}

@@ -1,0 +1,43 @@
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: env(--font-sans);
+	font-weight: 700;
+	line-height: 1.25;
+}
+
+p,
+ul,
+li {
+	font-weight: 500;
+	line-height: 1.5;
+	font-family: env(--font-mono);
+	font-size: 16rem;
+}
+
+.text-xs {
+	font-size: 4rem;
+}
+
+.text-sm {
+	font-size: 8rem;
+}
+
+.text-md {
+	font-size: 16rem;
+}
+
+.text-lg {
+	font-size: 24rem;
+}
+
+.text-xl {
+	font-size: 32rem;
+}
+
+.text-xxl {
+	font-size: 40rem;
+}

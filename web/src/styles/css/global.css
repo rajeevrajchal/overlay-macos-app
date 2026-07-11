@@ -1,0 +1,51 @@
+@import './text.css';
+
+:root {
+	color-scheme: light dark;
+
+	--content-max-width: 960px;
+	--layout-gutter: clamp(8px, 2vw, 24px);
+
+	--color-primary: light-dark(env(--color-light-primary), env(--color-dark-primary));
+	--color-secondary: light-dark(env(--color-light-secondary), env(--color-dark-secondary));
+	--color-tertiary: light-dark(env(--color-light-tertiary), env(--color-dark-tertiary));
+	--color-accent: light-dark(env(--color-light-accent), env(--color-dark-accent));
+	--color-text: light-dark(env(--color-dark-primary), env(--color-light-primary));
+}
+
+/* All px will be change to rem */
+html {
+	font-size: 0.0625rem; /* 1rem = 16px so it 1px to 0.0625rem */
+}
+
+body {
+	position: relative;
+	margin: 0;
+	font-family: env(--font-sans);
+	background: var(--color-primary);
+	color: var(--color-text);
+	transition:
+		background env(--transition-base),
+		color env(--transition-base);
+}
+
+.app-content {
+	width: min(100vw - (2 * var(--layout-gutter)), var(--content-max-width));
+	margin-inline: auto;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(env(--grid-columns-mobile), 1fr);
+	gap: env(--grid-gap-mobile);
+
+	@media (--md) {
+		grid-template-columns: repeat(env(--grid-columns-tablet), 1fr);
+		gap: env(--grid-gap-tablet);
+	}
+
+	@media (--lg) {
+		grid-template-columns: repeat(env(--grid-columns-desktop), 1fr);
+		gap: env(--grid-gap-desktop);
+	}
+}
